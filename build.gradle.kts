@@ -175,3 +175,12 @@ val checkResearchMixinLoader by tasks.registering(JavaExec::class) {
 }
 
 tasks.check.configure { dependsOn(checkResearchSources, checkResearchMixinLoader) }
+
+val checkSuperTicTooltip by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Checks optional SuperTiC tooltip loading and defaults for unconfigured materials."
+    classpath(configurations.compileClasspath, functionalTest.runtimeClasspath, sourceSets.main.get().output, sourceSets.patchedMc.get().output)
+    mainClass.set("com.iouter.gtnhdumper.common.utils.SuperTicTooltipRegression")
+}
+
+tasks.check.configure { dependsOn(checkSuperTicTooltip) }
