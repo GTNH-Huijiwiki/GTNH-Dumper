@@ -122,6 +122,7 @@ public class StructureHacks {
     private static <T> ObjectSet<ItemStack> extractTieredBlocks(T multi, IStructureElement<T> element,
         ConstructableData data, String channel) {
         ObjectSet<ItemStack> result = new ObjectLinkedOpenHashSet<>();
+        Collection<String> channels = channel.isEmpty() ? Collections.emptySet() : Collections.singleton(channel);
         ItemStack holo = HOLO_STACK.copy();
         int tier = 0;
         ItemStack lastStack = null;
@@ -136,18 +137,18 @@ public class StructureHacks {
             if (!iterator.hasNext()) break;
             ItemStack firstStack = iterator.next();
 
-            if (!data.addItemTier(firstStack, lastStack, channel, tier)) break;
+            if (!data.addItemTier(firstStack, lastStack, channels, tier)) break;
             result.add(firstStack);
             lastStack = firstStack.copy();
 
             while (iterator.hasNext()) {
                 ItemStack stack = iterator.next();
-                data.addItemTier(stack, channel, tier);
+                data.addItemTier(stack, channels, tier);
                 result.add(stack);
             }
         } while (tier < MAX_TIERS_TO_CHECK);
 
-        data.setMaxTier(tier - 1, channel);
+        data.setMaxTier(tier - 1, channels);
         return result;
     }
 
