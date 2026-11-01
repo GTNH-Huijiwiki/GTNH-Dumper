@@ -3,6 +3,18 @@
 
  Special thanks : https://github.com/GTNewHorizons/ExampleMod1.7.10
 
+## 板材切割机数据
+
+板材切割机从真实的 `cutterRecipes` 配方池读取数据，按物品输入、输出和原始
+`sourceMod` 分组。物品比较沿用 NEI 的规则，包含数量和 NBT；不同来源分别导出。
+例如锝杆切割分别保留 BartWorks 的 4 EU/t 配方和 GT++ 的 120 EU/t 配方。
+
+组内沿用 NEI 的合并规则，`inputFluids` 的首个槽位保存切削液候选列表，
+每个候选包含实际用量、概率及 NBT。候选顺序与游戏一致，供 Wiki 流体槽轮播。
+`fluidDurations` 数组按候选顺序保存每项耗时（tick），同种流体的不同用量分别保留。
+界面固定显示斜杠分隔的时间列表。
+旧记录继续使用自身的流体和耗时。
+
 ## 按 Mod 导出
 
 在游戏内打开 **NEI 选项 → 工具 → 数据导出 → GTNH Dumper**，在 **Mod 筛选 / Mod filter**
