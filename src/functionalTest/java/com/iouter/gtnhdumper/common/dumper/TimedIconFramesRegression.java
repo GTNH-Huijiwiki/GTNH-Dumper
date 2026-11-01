@@ -6,6 +6,7 @@ import java.awt.image.BufferedImage;
 public final class TimedIconFramesRegression {
 
     public static void main(String[] args) {
+        com.iouter.gtnhdumper.common.utils.SpriteAnimationRegression.main(args);
         checkProfiles();
         checkFrameStrip();
     }

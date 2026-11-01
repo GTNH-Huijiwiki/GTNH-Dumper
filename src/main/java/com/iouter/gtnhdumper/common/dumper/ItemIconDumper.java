@@ -15,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -592,9 +591,6 @@ public class ItemIconDumper extends WikiDumper {
             GLStateManager.glTranslated(8 * (1 - scale), 8 * (1 - scale), 0);
             GLStateManager.glScaled(scale, scale, scale);
             itemRenderer.renderItemAndEffectIntoGUI(minecraft.fontRenderer, minecraft.renderEngine, itemStack, 0, 0);
-            if (dynamicTexture != null) {
-                dynamicTexture.updateAnimation();
-            }
         } finally {
             if (restoreCull) GLStateManager.enableCull();
             GLStateManager.disableLighting();
@@ -725,18 +721,16 @@ public class ItemIconDumper extends WikiDumper {
         boolean is3dBlockItem = is3dBlockItem(itemStack);
         FBOHelper dynamicFbo = getFbo(is3dBlockItem ? SINGLE_FRAME_SIZE : getDynamicTextureSize(dynamicTexture));
         BufferedImage[] images = new BufferedImage[frameCount];
-        for (int i = 0; i < frameCount; i++) {
-            images[dynamicTexture.getIndex()] = renderItem(itemStack, dynamicFbo, itemRenderer, 1f, dynamicTexture);
+        try {
+            for (int i = 0; i < frameCount; i++) {
+                dynamicTexture.uploadFrame(i);
+                images[i] = renderItem(itemStack, dynamicFbo, itemRenderer, 1f, null);
+            }
+        } finally {
+            dynamicTexture.restore();
+            dynamicFbo.restoreTexture();
         }
-        BufferedImage image;
-        if (Arrays.stream(images)
-            .anyMatch(Objects::isNull)) {
-            GTNHDumper.LOG.warn("{}'s frames has null frame", itemStack.getDisplayName());
-            images = Arrays.stream(images)
-                .filter(Objects::nonNull)
-                .toArray(BufferedImage[]::new);
-        }
-        image = concatenateImages(images);
+        BufferedImage image = concatenateImages(images, false);
         frameCountMap.put(itemStack, image.getWidth() / image.getHeight());
         dynamicSizeMap.put(itemStack, image.getHeight());
         FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), resizeImage(images[0], SINGLE_FRAME_SIZE));
