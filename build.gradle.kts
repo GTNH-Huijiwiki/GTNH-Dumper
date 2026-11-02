@@ -82,8 +82,15 @@ val checkModFilter by tasks.registering(JavaExec::class) {
     mainClass.set("com.iouter.gtnhdumper.ModFilterRegression")
 }
 
+val checkDeferredRecipeSource by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Checks GTNL deferred recipe ownership and preservation of original copy sources."
+    classpath(functionalTest.output, sourceSets.main.get().output)
+    mainClass.set("com.iouter.gtnhdumper.common.utils.DeferredRecipeSourceRegression")
+}
+
 tasks.check.configure {
-    dependsOn(checkModFilter)
+    dependsOn(checkModFilter, checkDeferredRecipeSource)
 }
 
 // Run tests in the default runServer/runClient configurations
