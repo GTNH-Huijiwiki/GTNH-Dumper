@@ -31,7 +31,7 @@ import gregtech.api.enums.Materials;
 import gregtech.api.recipe.BasicUIProperties;
 import gregtech.api.recipe.RecipeCategory;
 import gregtech.api.recipe.RecipeMap;
-import gregtech.api.recipe.RecipeMapBackend;
+import gregtech.api.recipe.RecipeMaps;
 import gregtech.api.util.GTRecipe;
 import gregtech.nei.GTNEIDefaultHandler;
 import tectech.TecTech;
@@ -57,9 +57,7 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
         if (ModFilter.current()
             .isActive()) {
             RecipeCategory category = getRecipeCategory(handler);
-            long unknown = recipeMap.getBackend()
-                .getAllRecipes()
-                .stream()
+            long unknown = sourceRecipes(handler).stream()
                 .filter(recipe -> recipe.getRecipeCategory() == category && !recipe.mHidden)
                 .filter(recipe -> originalOwner(recipe) == null)
                 .count();
@@ -83,8 +81,7 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
         List<GTDumpedRecipe> recipes = new ArrayList<>();
         RecipeCategory category = getRecipeCategory(handler);
         RecipeMap<?> recipeMap = handler.getRecipeMap();
-        RecipeMapBackend recipeMapBackend = recipeMap.getBackend();
-        Collection<GTRecipe> gtRecipes = recipeMapBackend.getAllRecipes();
+        Collection<GTRecipe> gtRecipes = sourceRecipes(handler);
         ModFilter filter = ModFilter.current();
         if (recipeMap.getFrontend() instanceof EyeOfHarmonyFrontend) {
             // This storage lacks owner history; the final filter can still select its item outputs.
@@ -178,6 +175,13 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
         return recipes;
     }
 
+    private static Collection<GTRecipe> sourceRecipes(GTNEIDefaultHandler handler) {
+        RecipeMap<?> map = handler.getRecipeMap();
+        if (map == RecipeMaps.cutterFakeRecipes) return CuttingRecipeGroups.getRecipes(getRecipeCategory(handler));
+        return map.getBackend()
+            .getAllRecipes();
+    }
+
     public static String originalOwner(GTRecipe recipe) {
         ModContainer owner = recipe.owners == null || recipe.owners.isEmpty() ? null : recipe.owners.get(0);
         return DeferredRecipeSource.resolve(owner == null ? null : owner.getModId(), recipe.stackTraces);
@@ -235,7 +239,7 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
     public static class GTDumpedRecipe {
 
         private final ArrayList<Object> inputItems;
-        private final ArrayList<RecipeFluid> inputFluids;
+        private final ArrayList<Object> inputFluids;
         private final ArrayList<Object> outputItems;
         private final ArrayList<RecipeFluid> outputFluids;
         private final ArrayList<Object> otherItems;
@@ -250,7 +254,7 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
         private String neiDescriptionError;
         private Integer burnTime;
         private List<String> allowedBoilerTypes;
-        private Map<String, Integer> fluidDurations;
+        private List<Integer> fluidDurations;
         private thaumcraft.api.aspects.AspectList inputAspects;
 
         public GTDumpedRecipe withInputAspects(thaumcraft.api.aspects.AspectList aspects) {
@@ -269,12 +273,18 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
                     @SuppressWarnings("unchecked")
                     Map<net.minecraftforge.fluids.FluidStack, Integer> durations = (Map<net.minecraftforge.fluids.FluidStack, Integer>) field
                         .get(recipe.mSpecialItems);
-                    fluidDurations = new LinkedHashMap<>();
-                    durations.forEach(
-                        (fluid, ticks) -> fluidDurations.put(
-                            fluid.getFluid()
-                                .getName(),
-                            ticks));
+                    fluidDurations = new ArrayList<>();
+                    ArrayList<RecipeFluid> alternatives = new ArrayList<>();
+                    durations.forEach((fluid, ticks) -> {
+                        // 同一种流体可有不同用量和耗时，按候选顺序保留每一项。
+                        fluidDurations.add(ticks);
+                        alternatives.add(
+                            new RecipeFluid(fluid).withNBT(fluid)
+                                .withChance(recipe.getFluidInputChance(0)));
+                    });
+                    // NEI的单个流体槽轮播全部切削液，保留各候选的用量和游戏顺序。
+                    inputFluids.clear();
+                    inputFluids.add(alternatives);
                 } catch (ReflectiveOperationException error) {
                     throw new IllegalStateException("Cannot read cutting fluid durations", error);
                 }
@@ -320,7 +330,7 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
             ArrayList<Object> outputItems, ArrayList<RecipeFluid> outputFluids, ArrayList<Object> otherItems, int eut,
             long duration, int specialValue, Map<String, Object> metadata) {
             this.inputItems = inputItems;
-            this.inputFluids = inputFluids;
+            this.inputFluids = inputFluids == null ? null : new ArrayList<>(inputFluids);
             this.outputItems = outputItems;
             this.outputFluids = outputFluids;
             this.otherItems = otherItems;
