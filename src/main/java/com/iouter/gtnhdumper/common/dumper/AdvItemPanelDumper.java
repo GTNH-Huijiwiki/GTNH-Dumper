@@ -150,7 +150,8 @@ public class AdvItemPanelDumper extends WikiDumper {
         Map<ItemStack, String> originalNameMap = new HashMap<>(itemStacks.size());
         Utils.getEnglishTranslation(() -> {
             for (ItemStack stack : itemStacks) {
-                originalNameMap.put(stack, GuiContainerManager.itemDisplayNameShort(stack.copy()));
+                originalNameMap.put(stack,EnumChatFormatting
+                    .getTextWithoutFormattingCodes(GuiContainerManager.itemDisplayNameShort(stack)));
             }
         });
         return originalNameMap;
