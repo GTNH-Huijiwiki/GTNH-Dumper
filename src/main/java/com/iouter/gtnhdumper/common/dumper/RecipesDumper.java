@@ -253,8 +253,9 @@ public class RecipesDumper extends FilteredDataDumper {
                 handler = com.iouter.gtnhdumper.common.utils.NEIHandlerInstances.create(prototype);
             final String name = handler.getRecipeName();
             if (filter.isActive() && !(CommonProxy.isGTLoaded && handler instanceof GTNEIDefaultHandler)) {
-                skipped.put(handler.getHandlerId(), "Original registering mod is not recorded by this handler");
-                continue;
+                skipped.put(
+                    handler.getHandlerId(),
+                    "Original registering mod is not recorded; matching item outputs are still exported");
             }
             final String handlerName = handler.getHandlerId();
             final String handlerId = Objects
@@ -275,15 +276,18 @@ public class RecipesDumper extends FilteredDataDumper {
             }
             try (FileWriter writer = new FileWriter(file)) {
                 JsonObject data = dumpRecipes(handler).build();
+                filter.filterRecipes(data);
                 if (data.has("sourceFilterUnsupported")) {
-                    skipped.put(handlerName, "Custom recipe storage does not retain original owners");
+                    skipped.put(
+                        handlerName,
+                        "Custom recipe storage does not retain original owners; matching item outputs are still exported");
                 } else if (data.has("recipesWithoutSource") && data.get("recipesWithoutSource")
                     .getAsLong() > 0) {
                         skipped.put(
                             handlerName,
                             data.get("recipesWithoutSource")
                                 .getAsLong()
-                                + " recipes have no original owner; enable GregTech NEIRecipeOwner and restart before dumping");
+                                + " recipes have no original owner; matching item outputs are still exported; enable GregTech NEIRecipeOwner and restart for source matching");
                     }
                 GTNHDumper.GSON.toJson(data, writer);
                 recipesList.add(new String[] { name });
@@ -297,7 +301,7 @@ public class RecipesDumper extends FilteredDataDumper {
                 GTNHDumper.LOG.error(e);
             }
         }
-        if (!filter.isActive() && CommonProxy.isKubaTechLoaded) try {
+        if (CommonProxy.isKubaTechLoaded) try {
             EECRecipeDumper.dump();
             recipesList.add(new String[] { EECRecipeDumper.RECIPE_NAME });
         } catch (Exception e) {
@@ -306,7 +310,9 @@ public class RecipesDumper extends FilteredDataDumper {
         }
         if (filter.isActive()) {
             if (CommonProxy.isKubaTechLoaded) {
-                skipped.put("kubatech.eec", "Original registering mod is not recorded by this custom recipe storage");
+                skipped.put(
+                    "kubatech.eec",
+                    "Original registering mod is not recorded; matching item outputs are still exported");
             }
             File report = filter.outputFile("recipes_filter_report.json");
             try (FileWriter writer = new FileWriter(report)) {

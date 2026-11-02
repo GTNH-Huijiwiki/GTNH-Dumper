@@ -89,8 +89,15 @@ val checkDeferredRecipeSource by tasks.registering(JavaExec::class) {
     mainClass.set("com.iouter.gtnhdumper.common.utils.DeferredRecipeSourceRegression")
 }
 
+val checkRecipeOutputFilter by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Checks source-or-output recipe selection, item ownership, alternatives and complete records."
+    classpath(functionalTest.runtimeClasspath, sourceSets.main.get().output, sourceSets.patchedMc.get().output)
+    mainClass.set("com.iouter.gtnhdumper.common.utils.RecipeOutputFilterRegression")
+}
+
 tasks.check.configure {
-    dependsOn(checkModFilter, checkDeferredRecipeSource)
+    dependsOn(checkModFilter, checkDeferredRecipeSource, checkRecipeOutputFilter)
 }
 
 // Run tests in the default runServer/runClient configurations

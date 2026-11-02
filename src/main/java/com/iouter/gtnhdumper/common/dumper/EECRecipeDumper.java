@@ -36,7 +36,10 @@ public final class EECRecipeDumper {
             parent.mkdirs();
         }
         try (FileWriter writer = new FileWriter(outputFile)) {
-            GTNHDumper.GSON.toJson(build(), writer);
+            JsonObject data = build();
+            ModFilter.current()
+                .filterRecipes(data);
+            GTNHDumper.GSON.toJson(data, writer);
         }
         GTNHDumper.info("已写入：" + outputFile.getAbsolutePath());
     }

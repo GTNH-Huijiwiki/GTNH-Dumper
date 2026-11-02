@@ -87,8 +87,7 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
         Collection<GTRecipe> gtRecipes = recipeMapBackend.getAllRecipes();
         ModFilter filter = ModFilter.current();
         if (recipeMap.getFrontend() instanceof EyeOfHarmonyFrontend) {
-            // This custom storage does not retain GTRecipe's owner history.
-            if (filter.isActive() && !RecipeItemVariants.isCollecting()) return recipes;
+            // This storage lacks owner history; the final filter can still select its item outputs.
             try {
                 EyeOfHarmonyRecipeStorage storage = TecTech.eyeOfHarmonyRecipeStorage;
                 Class<?> clazz = EyeOfHarmonyRecipeStorage.class;
@@ -157,7 +156,8 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
             .filter(gtRecipe -> gtRecipe.getRecipeCategory() == category)
             .filter(
                 gtRecipe -> RecipeItemVariants.isCollecting() || !filter.isActive()
-                    || filter.matchesMod(originalOwner(gtRecipe)))
+                    || filter.matchesMod(originalOwner(gtRecipe))
+                    || filter.matchesItemOutputs(gtRecipe.mOutputs))
             .map(recipe -> {
                 if (!RecipeItemVariants.isCollecting()) return Transformer.transformGTRecipe(recipe);
                 try {
