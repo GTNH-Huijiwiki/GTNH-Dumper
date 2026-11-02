@@ -82,8 +82,35 @@ val checkModFilter by tasks.registering(JavaExec::class) {
     mainClass.set("com.iouter.gtnhdumper.ModFilterRegression")
 }
 
+val checkDeferredRecipeSource by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Checks GTNL deferred recipe ownership and preservation of original copy sources."
+    classpath(functionalTest.output, sourceSets.main.get().output)
+    mainClass.set("com.iouter.gtnhdumper.common.utils.DeferredRecipeSourceRegression")
+}
+
+val checkRecipeOutputFilter by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Checks source-or-output recipe selection, item ownership, alternatives and complete records."
+    classpath(functionalTest.runtimeClasspath, sourceSets.main.get().output, sourceSets.patchedMc.get().output)
+    mainClass.set("com.iouter.gtnhdumper.common.utils.RecipeOutputFilterRegression")
+}
+
+// Headless NEI initialization still links Minecraft's LWJGL 2 DisplayMode constructor.
+val recipeSelectionLwjgl by configurations.creating
+dependencies {
+    add(recipeSelectionLwjgl.name, "org.lwjgl.lwjgl:lwjgl:2.9.4-nightly-20150209")
+}
+
+val checkRecipeSelection by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Checks native output preselection, selected-only tank extraction and empty recipe files."
+    classpath(recipeSelectionLwjgl, configurations.compileClasspath, functionalTest.runtimeClasspath, sourceSets.main.get().output, sourceSets.patchedMc.get().output)
+    mainClass.set("com.iouter.gtnhdumper.common.utils.RecipeSelectionRegression")
+}
+
 tasks.check.configure {
-    dependsOn(checkModFilter)
+    dependsOn(checkModFilter, checkDeferredRecipeSource, checkRecipeOutputFilter, checkRecipeSelection)
 }
 
 // Run tests in the default runServer/runClient configurations
@@ -175,3 +202,12 @@ val checkResearchMixinLoader by tasks.registering(JavaExec::class) {
 }
 
 tasks.check.configure { dependsOn(checkResearchSources, checkResearchMixinLoader) }
+
+val checkSuperTicTooltip by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Checks optional SuperTiC tooltip loading and defaults for unconfigured materials."
+    classpath(configurations.compileClasspath, functionalTest.runtimeClasspath, sourceSets.main.get().output, sourceSets.patchedMc.get().output)
+    mainClass.set("com.iouter.gtnhdumper.common.utils.SuperTicTooltipRegression")
+}
+
+tasks.check.configure { dependsOn(checkSuperTicTooltip) }

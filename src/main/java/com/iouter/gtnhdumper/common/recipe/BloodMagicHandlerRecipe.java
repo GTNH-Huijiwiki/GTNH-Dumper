@@ -92,6 +92,9 @@ public class BloodMagicHandlerRecipe extends BaseHandlerRecipe {
             }
             int recipeIndex = 0;
             for (TemplateRecipeHandler.CachedRecipe recipe : template.arecipes) {
+                int originalIndex = recipeIndex++;
+                if (selection.isActive() && !(meteor ? selection.matchesStacks(recipe.getOtherStacks())
+                    : selection.matchesStack(recipe.getResult()))) continue;
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("inputItems", Utils.getRecipeItems(recipe.getIngredients()));
                 if (meteor) {
@@ -107,7 +110,7 @@ public class BloodMagicHandlerRecipe extends BaseHandlerRecipe {
                             .invoke(recipe));
                     List<Object> outputs = new ArrayList<>();
                     List<Integer> indices = new ArrayList<>();
-                    List<Map<String, Object>> parts = meteorParts(meteors.get(recipeIndex++));
+                    List<Map<String, Object>> parts = meteorParts(meteors.get(originalIndex));
                     int outputIndex = 0;
                     for (PositionedStack stack : recipe.getOtherStacks()) {
                         Object converted = RecipeUtil.getRecipeItems(stack);

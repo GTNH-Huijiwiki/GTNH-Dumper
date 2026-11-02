@@ -146,6 +146,9 @@ public class MobHandlerInfernalRecipe extends BaseHandlerRecipe {
             if (!infernalRecipeClass.isInstance(cachedRecipe)) {
                 continue;
             }
+            if (selection.isActive() && !selection.matchesStacks(getElite(cachedRecipe))
+                && !selection.matchesStacks(getUltra(cachedRecipe))
+                && !selection.matchesStacks(getInferno(cachedRecipe))) continue;
             double eliteChance = getEliteChance(cachedRecipe);
             double ultraChance = getUltraChance(cachedRecipe);
             double infernoChance = getInfernoChance(cachedRecipe);

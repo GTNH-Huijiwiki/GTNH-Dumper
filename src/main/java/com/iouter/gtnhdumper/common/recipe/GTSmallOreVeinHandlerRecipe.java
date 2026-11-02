@@ -49,6 +49,7 @@ public class GTSmallOreVeinHandlerRecipe extends BaseHandlerRecipe {
                     }
                 }
 
+                if (!selection.matchesItems(ores)) continue;
                 ArrayList<Object> outputItems = new ArrayList<>();
                 WorldgenRecipeUtil.addItemAlternatives(outputItems, ores);
                 ArrayList<Object> otherItems = new ArrayList<>();

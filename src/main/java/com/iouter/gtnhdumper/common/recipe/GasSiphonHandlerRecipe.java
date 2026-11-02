@@ -21,6 +21,7 @@ public class GasSiphonHandlerRecipe extends BaseHandlerRecipe {
 
     @Override
     public List<?> getRecipes(IRecipeHandler baseHandler) {
+        if (selection.isActive()) return java.util.Collections.emptyList(); // Fluid-only, no recorded source.
         List<GasSiphonRecipe> recipes = new ArrayList<>();
         for (Map.Entry<String, GasSiphonRecipes.GasSiphonRecipe> entry : GasSiphonRecipes.RECIPES.entrySet()) {
             for (Map.Entry<Integer, FluidStack> innerEntry : entry.getValue().depths.entrySet()) {

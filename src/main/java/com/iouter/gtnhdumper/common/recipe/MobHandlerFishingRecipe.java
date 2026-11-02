@@ -35,8 +35,22 @@ public class MobHandlerFishingRecipe extends BaseHandlerRecipe {
         List<Map<String, Object>> result = new ArrayList<>();
         try {
             for (Object recipe : template.arecipes) {
+                List<?> categories = (List<?>) field(recipe, "categories");
+                if (selection.isActive()) {
+                    boolean matches = false;
+                    for (Object category : categories) {
+                        for (Object value : (List<?>) field(category, "stacks")) {
+                            if (selection.matchesStack((PositionedStack) value)) {
+                                matches = true;
+                                break;
+                            }
+                        }
+                        if (matches) break;
+                    }
+                    if (!matches) continue;
+                }
                 Map<String, Object> data = new LinkedHashMap<>();
-                for (Object category : (List<?>) field(recipe, "categories")) {
+                for (Object category : categories) {
                     String name = ((Enum<?>) field(category, "title")).name()
                         .toLowerCase(java.util.Locale.ROOT);
                     data.put(name + "Chance", field(category, "chance"));

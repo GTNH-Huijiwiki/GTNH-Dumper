@@ -32,7 +32,14 @@ public class CropsNHHandlerRecipe extends BaseHandlerRecipe {
         recipeHandler.loadCraftingRecipes(recipeHandler.getOverlayIdentifier(), (Object) null);
         for (TemplateRecipeHandler.CachedRecipe recipe : recipeHandler.arecipes) {
             try {
-                ArrayList<Object> otherItems = getRecipeItems(recipe);
+                ItemStack seed = recipe.getIngredients()
+                    .get(0).items[0];
+                ICropCard cropCard = CropRegistry.instance.get(seed);
+                if (!selection.matchesItems(
+                    cropCard.getDropTable()
+                        .keySet()))
+                    continue;
+                ArrayList<Object> otherItems = getRecipeItems(cropCard);
                 if (otherItems.isEmpty()) otherItems = null;
                 Map<String, Object> data = new java.util.LinkedHashMap<>();
                 data.put("inputItems", Utils.getRecipeItems(recipe.getIngredients()));
@@ -52,11 +59,8 @@ public class CropsNHHandlerRecipe extends BaseHandlerRecipe {
         return recipes;
     }
 
-    private static ArrayList<Object> getRecipeItems(TemplateRecipeHandler.CachedRecipe recipe) {
+    private static ArrayList<Object> getRecipeItems(ICropCard cropCard) {
         ArrayList<Object> items = new ArrayList<>();
-        ItemStack seed = recipe.getIngredients()
-            .get(0).items[0];
-        ICropCard cropCard = CropRegistry.instance.get(seed);
         for (Map.Entry<ItemStack, Integer> drop : cropCard.getDropTable()
             .entrySet()
             .stream()

@@ -76,10 +76,13 @@ public class NEIDisplayHandlerRecipe extends BaseHandlerRecipe {
         if (RecipeItemVariants.isCollecting()) return result;
         String name = handler.getClass()
             .getSimpleName();
-        Map<Integer, Map<String, Object>> tanks = com.iouter.gtnhdumper.common.utils.RecipeTankData.read(template);
-        int recipeIndex = 0;
+        java.util.BitSet selected = selection.selectIndexes(template.arecipes, recipe -> matchesOutput(name, recipe));
+        Map<Integer, Map<String, Object>> tanks = com.iouter.gtnhdumper.common.utils.RecipeTankData
+            .read(template, selected::get);
         try {
-            for (TemplateRecipeHandler.CachedRecipe recipe : template.arecipes) {
+            for (int recipeIndex = selected.nextSetBit(0); recipeIndex
+                >= 0; recipeIndex = selected.nextSetBit(recipeIndex + 1)) {
+                TemplateRecipeHandler.CachedRecipe recipe = template.arecipes.get(recipeIndex);
                 if (name.equals("EnchanterRecipeHandler")) {
                     enchantments(recipe, result);
                     continue;
@@ -90,7 +93,6 @@ public class NEIDisplayHandlerRecipe extends BaseHandlerRecipe {
                 }
                 Map<String, Object> data = basic(recipe);
                 if (tanks.containsKey(recipeIndex)) data.putAll(tanks.get(recipeIndex));
-                recipeIndex++;
                 switch (name) {
                     case "NEIInfusedSeedRecipeHandler" -> {
                         // 蕴魔种子掉落：wrapper 中的掉落表是产物，chance 已按权重换算为百分数。
@@ -134,7 +136,7 @@ public class NEIDisplayHandlerRecipe extends BaseHandlerRecipe {
                         // 完整处理器按注册池顺序创建缓存；保留翻译键作为稳定身份，不解析本地化说明。
                         Object pool = new ArrayList<>(
                             com.gtnewhorizon.cropsnh.farming.registries.MutationRegistry.instance.getMutationPools())
-                                .get(recipeIndex - 1);
+                                .get(recipeIndex);
                         String poolId = (String) call(pool, "getUnlocalisedName");
                         data.put("mutationPoolId", poolId);
                         data.put("mutationPoolName", net.minecraft.util.StatCollector.translateToLocal(poolId));
@@ -238,6 +240,35 @@ public class NEIDisplayHandlerRecipe extends BaseHandlerRecipe {
             throw new IllegalStateException("Cannot export NEI display data for " + name, e);
         }
         return result;
+    }
+
+    private boolean matchesOutput(String name, TemplateRecipeHandler.CachedRecipe recipe) {
+        try {
+            switch (name) {
+                case "VatRecipeHandler":
+                    return false; // Expanded rows contain fluids only.
+                case "LootBagRecipeHandler":
+                    return selection.matchesStacks(recipe.getOtherStacks());
+                case "NEIInfusedSeedRecipeHandler":
+                    for (Object drop : (List<?>) field(field(recipe, "wrapper"), "drops")) {
+                        if (selection.matches((ItemStack) field(drop, "stack"))) return true;
+                    }
+                    return false;
+                case "SagMillRecipeHandler":
+                    return selection.matchesStack(recipe.getResult())
+                        || selection.matchesStacks(recipe.getOtherStacks());
+                case "NEIHandlerMoistener":
+                    if (selection.matchesStack(recipe.getResult())) return true;
+                    for (PositionedStack stack : recipe.getOtherStacks()) {
+                        if (stack.relx == 100 && selection.matchesStack(stack)) return true;
+                    }
+                    return false;
+                default:
+                    return selection.matchesStack(recipe.getResult());
+            }
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Cannot inspect recipe outputs for " + name, e);
+        }
     }
 
     /** 附魔器逐等级生成独立配方，材料数量、书籍NBT和经验等级不再独立轮播。 */

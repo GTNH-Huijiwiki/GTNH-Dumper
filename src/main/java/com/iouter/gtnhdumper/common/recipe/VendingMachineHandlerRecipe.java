@@ -22,6 +22,7 @@ public class VendingMachineHandlerRecipe extends BaseHandlerRecipe {
         recipeHandler.loadCraftingRecipes(recipeHandler.getOverlayIdentifier(), (Object) null);
         List<BaseRecipe> recipes = new ArrayList<>();
         for (TemplateRecipeHandler.CachedRecipe recipe : recipeHandler.arecipes) {
+            if (selection.isActive() && !selection.matchesStacks(recipe.getOtherStacks())) continue;
             // Vending Machine represents a trade with no primary result. Its actual outputs are exposed through
             // getOtherStacks(), unlike conventional NEI recipes handled by GeneralHandlerRecipe.
             ArrayList<Object> outputItems = Utils.getRecipeItems(recipe.getOtherStacks());

@@ -33,6 +33,33 @@ public final class NEIRecipeText {
         return StatCollector.translateToLocalFormatted(key, arguments);
     }
 
+    /** Read the native output fields used by enrich, before converting inputs or extracting metadata. */
+    public static boolean matchesOutputs(String source, TemplateRecipeHandler.CachedRecipe recipe,
+        RecipeSelection selection) {
+        if (!selection.isActive()) return true;
+        try {
+            switch (source) {
+                case "alkalus.main.nei.NEI_Handler_Distillery":
+                    return selection.matchesStacks(
+                        java.util.Arrays.asList((codechicken.nei.PositionedStack[]) field(recipe, "outputs")));
+                case "com.kuba6000.mobsinfo.nei.VillagerTradesHandler":
+                    for (Object pair : (List<?>) field(recipe, "tradeList")) {
+                        Object sides = call(pair, "getLeft");
+                        if (selection.matchesStack((codechicken.nei.PositionedStack) call(sides, "getRight")))
+                            return true;
+                    }
+                    return false;
+                case "com.pam.harvestcraft.AnimalTrapRecipeHandler":
+                case "com.pam.harvestcraft.FishTrapRecipeHandler":
+                    return selection.matchesStacks(recipe.getOtherStacks());
+                default:
+                    return selection.matchesStack(recipe.getResult());
+            }
+        } catch (ReflectiveOperationException error) {
+            throw new IllegalStateException("Cannot inspect recipe outputs for " + source, error);
+        }
+    }
+
     /** 每条记录保留结构化量值和显示说明；失败单独记录，不能将失败当成无文字。 */
     public static void enrich(TemplateRecipeHandler handler, TemplateRecipeHandler.CachedRecipe recipe, int recipeIndex,
         Map<String, Object> data) {

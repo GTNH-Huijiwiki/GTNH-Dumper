@@ -22,6 +22,7 @@ public class GeneralHandlerRecipe extends BaseHandlerRecipe {
         if (handler.getClass()
             .getName()
             .equals("tconstruct.plugins.nei.RecipeHandlerMelting")) {
+            if (selection.isActive()) return java.util.Collections.emptyList(); // Fluid outputs only.
             try {
                 return com.iouter.gtnhdumper.common.utils.TConstructMeltingRecipes.read();
             } catch (ReflectiveOperationException e) {
@@ -43,7 +44,7 @@ public class GeneralHandlerRecipe extends BaseHandlerRecipe {
             if (loaded.getClass()
                 .getName()
                 .equals("ganymedes01.etfuturum.compat.nei.BannerPatternHandler")) {
-                return com.iouter.gtnhdumper.common.utils.BannerPatternRecipes.read(loaded);
+                return com.iouter.gtnhdumper.common.utils.BannerPatternRecipes.read(loaded, selection);
             }
             recipeHandler.arecipes.clear();
             recipeHandler.arecipes.addAll(loaded.arecipes);
@@ -54,10 +55,18 @@ public class GeneralHandlerRecipe extends BaseHandlerRecipe {
                 e);
             return null;
         }
+        java.util.BitSet selected = selection.selectIndexes(
+            recipeHandler.arecipes,
+            recipe -> com.iouter.gtnhdumper.common.utils.NEIRecipeText.matchesOutputs(
+                handler.getClass()
+                    .getName(),
+                recipe,
+                selection));
         java.util.Map<Integer, java.util.Map<String, Object>> tanks = com.iouter.gtnhdumper.common.utils.RecipeTankData
-            .read(recipeHandler);
-        int recipeIndex = 0;
-        for (TemplateRecipeHandler.CachedRecipe recipe : recipeHandler.arecipes) {
+            .read(recipeHandler, selected::get);
+        for (int recipeIndex = selected.nextSetBit(0); recipeIndex
+            >= 0; recipeIndex = selected.nextSetBit(recipeIndex + 1)) {
+            TemplateRecipeHandler.CachedRecipe recipe = recipeHandler.arecipes.get(recipeIndex);
             ArrayList<Object> otherItems;
             try {
                 otherItems = Utils.getRecipeItems(recipe.getOtherStacks());
@@ -72,7 +81,6 @@ public class GeneralHandlerRecipe extends BaseHandlerRecipe {
             if (tanks.containsKey(recipeIndex)) data.putAll(tanks.get(recipeIndex));
             com.iouter.gtnhdumper.common.utils.NEIRecipeText.enrich(recipeHandler, recipe, recipeIndex, data);
             recipes.add(data);
-            recipeIndex++;
         }
         return recipes;
     }

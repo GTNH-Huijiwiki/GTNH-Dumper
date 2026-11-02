@@ -30,6 +30,7 @@ public class CarpenterHandlerRecipe extends BaseHandlerRecipe {
         carpenter.loadCraftingRecipes(carpenter.getRecipeID(), (Object) null);
         List<BaseRecipe> recipes = new ArrayList<>();
         for (TemplateRecipeHandler.CachedRecipe cached : carpenter.arecipes) {
+            if (selection.isActive() && !selection.matchesStack(cached.getResult())) continue;
             if (!(cached instanceof NEIHandlerCarpenter.CachedCarpenterRecipe recipe)) {
                 continue;
             }

@@ -23,6 +23,7 @@ public class SpacePumpModuleHandlerRecipe extends BaseHandlerRecipe {
 
     @Override
     public List<?> getRecipes(IRecipeHandler handler) {
+        if (selection.isActive()) return java.util.Collections.emptyList(); // Fluid-only, no recorded source.
         List<SpacePumpModuleRecipe> recipes = new ArrayList<>();
         for (Map.Entry<Pair<Integer, Integer>, FluidStack> entry : SpacePumpingRecipes.RECIPES.entrySet()) {
             recipes.add(

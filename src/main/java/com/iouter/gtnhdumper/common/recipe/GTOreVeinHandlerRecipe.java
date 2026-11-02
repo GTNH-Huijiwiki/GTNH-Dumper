@@ -34,10 +34,18 @@ public class GTOreVeinHandlerRecipe extends BaseHandlerRecipe {
             try {
                 List<String> dims = WorldgenRecipeUtil.sortDimensions(vein.abbrDimNames);
                 Set<StoneType> stoneTypes = WorldgenRecipeUtil.getStoneTypes(dims);
+                List<java.util.Collection<net.minecraft.item.ItemStack>> outputs = new ArrayList<>();
+                boolean matches = !selection.isActive();
+                for (int layer = 0; layer < vein.ores.length; layer++) {
+                    java.util.Collection<net.minecraft.item.ItemStack> ores = vein.getVeinLayerOre(layer, stoneTypes);
+                    outputs.add(ores);
+                    if (selection.isActive() && selection.matchesItems(ores)) matches = true;
+                }
+                if (!matches) continue;
                 ArrayList<Object> outputItems = new ArrayList<>();
                 // Preserve all four slots, even if one layer has no available ore variants.
                 for (int layer = 0; layer < vein.ores.length; layer++) {
-                    outputItems.add(WorldgenRecipeUtil.getItemAlternatives(vein.getVeinLayerOre(layer, stoneTypes)));
+                    outputItems.add(WorldgenRecipeUtil.getItemAlternatives(outputs.get(layer)));
                 }
                 recipes.add(new OreVeinRecipe(vein, dims, WorldgenRecipeUtil.getDimensionInputs(dims), outputItems));
 

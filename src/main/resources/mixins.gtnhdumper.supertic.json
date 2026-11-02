@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8.5-GTNH",
+  "package": "com.iouter.gtnhdumper.mixins",
+  "refmap": "mixins.gtnhdumper.refmap.json",
+  "target": "@env(DEFAULT)",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": []
+}

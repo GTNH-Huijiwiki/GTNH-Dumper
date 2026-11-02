@@ -35,6 +35,7 @@ public class BotaniaHandlerRecipe extends BaseHandlerRecipe {
             .equals("RecipeHandlerRunicAltar") ? "manaUsage" : "mana";
         try {
             for (TemplateRecipeHandler.CachedRecipe recipe : template.arecipes) {
+                if (selection.isActive() && !selection.matchesStack(recipe.getResult())) continue;
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("inputItems", Utils.getRecipeItems(recipe.getIngredients()));
                 data.put("outputItems", Utils.getRecipeItems(recipe.getResult()));

@@ -12,6 +12,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
+import com.iouter.gtnhdumper.common.utils.RecipeSelection;
 import com.iouter.gtnhdumper.common.utils.RecipeUtil;
 
 import codechicken.nei.recipe.GuiRecipeTab;
@@ -23,6 +24,7 @@ import codechicken.nei.recipe.TemplateRecipeHandler;
 public abstract class BaseHandlerRecipe {
 
     private final JsonObject json = new JsonObject();
+    protected final RecipeSelection selection = RecipeSelection.current();
 
     public BaseHandlerRecipe(IRecipeHandler handler) {
         if (RecipeItemVariants.isCollecting()) {

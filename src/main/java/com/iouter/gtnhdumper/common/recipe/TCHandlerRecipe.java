@@ -40,6 +40,7 @@ public class TCHandlerRecipe extends BaseHandlerRecipe {
     public List<?> getRecipes(IRecipeHandler handler) {
         List<TCRecipe> recipes = new ArrayList<>();
         if (handler instanceof AspectCombinationHandler) {
+            if (selection.isActive()) return recipes; // Aspect outputs are not item outputs.
             for (Aspect aspect : Aspect.getCompoundAspects()) {
                 Aspect[] components = aspect.getComponents();
                 if (components == null) continue;
@@ -58,6 +59,7 @@ public class TCHandlerRecipe extends BaseHandlerRecipe {
                     if (!(o instanceof ShapedArcaneRecipe tcRecipe)) {
                         continue;
                     }
+                    if (selection.isActive() && !selection.matches(tcRecipe.getRecipeOutput())) continue;
                     Object[] inputItems = new Object[9];
                     for (int i = 0; i < tcRecipe.getInput().length; i++) {
                         Object oInput = tcRecipe.getInput()[i];
@@ -80,6 +82,7 @@ public class TCHandlerRecipe extends BaseHandlerRecipe {
             for (Object o : ThaumcraftApi.getCraftingRecipes()) {
                 try {
                     if (o instanceof ShapelessArcaneRecipe tcRecipe) {
+                        if (selection.isActive() && !selection.matches(tcRecipe.getRecipeOutput())) continue;
                         recipes.add(
                             new TCRecipe().withInputItems(
                                 Arrays.stream(
@@ -104,6 +107,7 @@ public class TCHandlerRecipe extends BaseHandlerRecipe {
                     if (!(o instanceof CrucibleRecipe tcRecipe)) {
                         continue;
                     }
+                    if (selection.isActive() && !selection.matches(tcRecipe.getRecipeOutput())) continue;
                     recipes.add(
                         new TCRecipe().withInputItems(getItemFromObject(tcRecipe.catalyst))
                             .withInputAspects(tcRecipe.aspects)
@@ -121,6 +125,10 @@ public class TCHandlerRecipe extends BaseHandlerRecipe {
                     if (!(o instanceof InfusionRecipe tcRecipe)) {
                         continue;
                     }
+                    if (selection.isActive()
+                        && !com.iouter.gtnhdumper.common.utils.InfusionExamples.hasCustomOutput(tcRecipe)
+                        && tcRecipe.getRecipeOutput() instanceof ItemStack output
+                        && !selection.matches(output)) continue;
                     if (tcRecipe.getRecipeInput() == null) {
                         RecipeCoverage.unsupported(
                             tcRecipe.getClass()
@@ -146,8 +154,9 @@ public class TCHandlerRecipe extends BaseHandlerRecipe {
                                     .getItem());
                             exampleStack = com.iouter.gtnhdumper.common.utils.InfusionExamples
                                 .prepareCustomInput(tcRecipe, exampleStack);
-                            exampleInput = new RecipeItem(exampleStack);
                             outputStack = (ItemStack) tcRecipe.getRecipeOutput(exampleStack);
+                            if (!selection.matches(outputStack)) continue;
+                            exampleInput = new RecipeItem(exampleStack);
                             outputTransform = com.iouter.gtnhdumper.common.utils.InfusionExamples.customRule(tcRecipe);
                         } else if (tcRecipe.getRecipeOutput() instanceof ItemStack) {
                             outputStack = (ItemStack) tcRecipe.getRecipeOutput();
@@ -160,13 +169,15 @@ public class TCHandlerRecipe extends BaseHandlerRecipe {
                                 codechicken.nei.ItemList.items,
                                 candidate -> r.getCentral()
                                     .matches(candidate));
-                            exampleInput = new RecipeItem(example);
                             outputStack = com.iouter.gtnhdumper.common.utils.InfusionExamples
                                 .apply(example, (String) obj[0], tag);
+                            if (!selection.matches(outputStack)) continue;
+                            exampleInput = new RecipeItem(example);
                             net.minecraft.nbt.NBTTagCompound patch = new net.minecraft.nbt.NBTTagCompound();
                             patch.setTag((String) obj[0], tag.copy());
                             outputNbtPatch = patch.toString();
                         }
+                        if (!selection.matches(outputStack)) continue;
                         recipes.add(
                             new TCRecipe().withKeyItem(
                                 getItemFromObject(

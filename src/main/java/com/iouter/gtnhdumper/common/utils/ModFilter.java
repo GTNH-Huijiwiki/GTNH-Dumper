@@ -4,10 +4,13 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
+import net.minecraftforge.oredict.OreDictionary;
 
+import com.google.gson.JsonObject;
 import com.iouter.gtnhdumper.automation.ExportSession;
 import com.iouter.gtnhdumper.common.base.ModFilterOption;
 
@@ -118,6 +121,44 @@ public final class ModFilter {
         if (fluid == null) return false;
         // Forge records the registering mod even for fluids without a placeable block.
         return matchesOwnedKey(FluidRegistry.getDefaultFluidName(fluid));
+    }
+
+    public boolean matchesItemOutputs(ItemStack[] outputs) {
+        if (outputs == null) return false;
+        for (ItemStack output : outputs) {
+            if (output != null && matchesItem(output)) return true;
+        }
+        return false;
+    }
+
+    public void filterRecipes(JsonObject category) {
+        if (isActive()) RecipeOutputFilter.filter(category, this::matchesMod, this::matchesOutputItemKey);
+    }
+
+    boolean matchesOutputItemKey(String key) {
+        if (key == null || key.startsWith("fluid.")) return false;
+        if (key.startsWith("#")) {
+            String oreName = key.substring(1);
+            if (!OreDictionary.doesOreNameExist(oreName)) return false;
+            for (ItemStack stack : OreDictionary.getOres(oreName)) {
+                if (stack != null && matchesItem(stack)) return true;
+            }
+            return false;
+        }
+        int namespace = key.indexOf(':');
+        if (namespace <= 0) return false;
+        int metadata = key.indexOf(':', namespace + 1);
+        String name = metadata < 0 ? key : key.substring(0, metadata);
+        Object item = Item.itemRegistry.getObject(name);
+        if (!(item instanceof Item)) return false;
+        int damage = 0;
+        try {
+            if (metadata >= 0) damage = Integer.parseInt(key.substring(metadata + 1));
+        } catch (NumberFormatException invalid) {
+            return false;
+        }
+        // Reconstruct the metadata so GT addon machines use the same owner resolution as item exports.
+        return matchesItem(new ItemStack((Item) item, 1, damage), name);
     }
 
     private boolean matchesOwnedKey(String key) {

@@ -48,6 +48,11 @@ public final class RecipeTankData {
     private RecipeTankData() {}
 
     public static Map<Integer, Map<String, Object>> read(TemplateRecipeHandler handler) {
+        return read(handler, index -> true);
+    }
+
+    public static Map<Integer, Map<String, Object>> read(TemplateRecipeHandler handler,
+        java.util.function.IntPredicate selected) {
         Map<Integer, Map<String, Object>> result = new HashMap<>();
         int[][] positions = POSITIONS.get(
             handler.getClass()
@@ -63,7 +68,7 @@ public final class RecipeTankData {
                 .equals("tconstruct.plugins.nei.RecipeHandlerCastingBasin");
         if ((positions == null && !alloy && !casting) || RecipeItemVariants.isCollecting()) return result;
         try {
-            for (Map<String, Object> record : NEIFluidTankDumper.dump(handler)) {
+            for (Map<String, Object> record : NEIFluidTankDumper.dump(handler, selected)) {
                 Map<String, Object> data = new LinkedHashMap<>();
                 List<Object> inputs = new ArrayList<>(), outputs = new ArrayList<>();
                 for (Object object : (List<?>) record.get("tanks")) {

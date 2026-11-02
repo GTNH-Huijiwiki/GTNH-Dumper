@@ -2,5 +2,5 @@ nei.options.tools.dump.gtnhdumper.modFilter=Mod 筛选
 nei.options.tools.dump.gtnhdumper.modFilter.tip=输入 Mod ID 或完整名称（不区分大小写），留空导出全部。配方按原始注册来源筛选，保存至 dumps/filtered/<modid>/。
 nei.options.tools.dump.gtnhdumper.modFilter.invalid=Mod 不存在或名称有歧义：%s。请输入已加载 Mod 的 ID、完整名称，或清空筛选。
 nei.options.tools.dump.gtnhdumper.modFilter.unsupported=%s 没有可靠的 Mod 归属信息，请清空 Mod 筛选后导出。
-nei.options.tools.dump.gtnhdumper.modFilter.skipped=%s 个配方分类缺少原始来源记录，详情见 %s。GT 配方必要时需开启 NEIRecipeOwner 并重启游戏。
+nei.options.tools.dump.gtnhdumper.modFilter.skipped=%s 个配方分类缺少原始来源记录，仍会导出产物匹配的配方，详情见 %s。GT 来源筛选必要时需开启 NEIRecipeOwner 并重启游戏。
 nei.options.tools.dump.gtnhdumper.gtstructure.dumped=GT 结构已导出至 %s

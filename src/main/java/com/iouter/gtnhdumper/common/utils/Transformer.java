@@ -88,9 +88,8 @@ public class Transformer {
         } catch (Exception e) {
             metadata = null;
         }
-        // 与GT燃料格式器一致：特殊值乘流体量或容器容量，非流体回退1000。
-        if (src.getRecipeCategory().recipeMap.getFrontend()
-            .getNEIProperties().neiSpecialInfoFormatter instanceof gregtech.nei.formatter.FuelSpecialValueFormatter) {
+        // 保留原始配方输入的总燃料值：特殊值乘流体量或容器容量，非流体回退1000。
+        if (src.getRecipeCategory().recipeMap.getFrontend() instanceof gregtech.api.recipe.maps.FuelFrontend) {
             int amount = src.mFluidInputs.length > 0 ? src.mFluidInputs[0].amount : 0;
             if (amount == 0) for (ItemStack input : src.mInputs) {
                 amount = net.minecraftforge.fluids.FluidContainerRegistry.getContainerCapacity(input);

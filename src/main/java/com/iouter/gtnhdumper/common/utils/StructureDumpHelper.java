@@ -2,7 +2,6 @@ package com.iouter.gtnhdumper.common.utils;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -31,7 +30,6 @@ import gregtech.api.util.HatchElementBuilder;
 public class StructureDumpHelper {
 
     // Copied from BlockRender6343
-    private static final Field occupiedSpacesField;
     private static final MethodHandle DOT_GETTER;
     private static final String HATCH_ELEMENT;
 
@@ -46,8 +44,6 @@ public class StructureDumpHelper {
             .getName();
 
         try {
-            occupiedSpacesField = StructureDefinition.class.getDeclaredField("occupiedSpaces");
-            occupiedSpacesField.setAccessible(true);
             MethodHandles.Lookup lookup = MethodHandles.lookup();
             MethodHandle hatchBuilder = lookup
                 .unreflectGetter(ReflectionHelper.findField(hatchEle.getClass(), "this$0"));
@@ -68,26 +64,17 @@ public class StructureDumpHelper {
      * @param structureDefinition 已构建的 StructureDefinition 实例
      * @return 解码后的 Map，Key 为结构名称，Value 为还原的 String[][] (维度为 [slice=c][row=b]，内部 String 长度为 a)
      */
-    @SuppressWarnings("unchecked")
     public static Map<String, String[][]> decodeShapes(StructureDefinition<?> structureDefinition) {
         Map<String, String[][]> result = new HashMap<>();
         Map<String, String> shapes = structureDefinition.getShapes();
         Map<String, IStructureElement<?>[]> structures = Collections
             .unmodifiableMap(structureDefinition.getStructures());
 
-        // 1. 通过反射获取私有的 occupiedSpaces 字段
-        Map<String, Set<Vec3Impl>> occupiedSpaces;
-        try {
-            occupiedSpaces = (Map<String, Set<Vec3Impl>>) occupiedSpacesField.get(structureDefinition);
-        } catch (Exception e) {
-            throw new RuntimeException("无法通过反射获取 occupiedSpaces 字段，请检查 StructureDefinition 源码是否变更", e);
-        }
-
         for (Map.Entry<String, String> entry : shapes.entrySet()) {
             String name = entry.getKey();
             String shapeStr = entry.getValue();
             IStructureElement<?>[] elements = structures.get(name);
-            Set<Vec3Impl> occupiedSpace = occupiedSpaces.getOrDefault(name, java.util.Collections.emptySet());
+            Set<Vec3Impl> occupiedSpace = StructureOccupancy.read(structureDefinition, name);
 
             if (elements == null || elements.length != shapeStr.length()) {
                 throw new IllegalStateException("结构名称 '" + name + "' 的 shape 字符串与 elements 数组长度不匹配！");
