@@ -28,6 +28,8 @@ public class AspectItemsHandlerRecipe extends BaseHandlerRecipe {
 
     @Override
     public List<?> getRecipes(IRecipeHandler handler) {
+        if (selection.isActive() && !selection.matches(new ItemStack(ModItems.itemAspect)))
+            return java.util.Collections.emptyList();
         Map<Aspect, List<ItemStack>> groups = new LinkedHashMap<>();
         for (ItemStack item : ItemList.items) {
             AspectList tags = ThaumcraftCraftingManager.getObjectTags(item);

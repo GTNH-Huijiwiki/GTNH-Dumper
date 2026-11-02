@@ -28,6 +28,7 @@ public class AvaExtremeShapedHandlerRecipe extends BaseHandlerRecipe {
         }
         recipeHandler.loadCraftingRecipes(recipeHandler.getOverlayIdentifier(), (Object) null);
         for (TemplateRecipeHandler.CachedRecipe recipe : recipeHandler.arecipes) {
+            if (selection.isActive() && !selection.matchesStack(recipe.getResult())) continue;
             Object[] inputItems = new Object[81];
             for (PositionedStack p : recipe.getIngredients()) {
                 int serial = getRecipeSerial(p.relx, p.rely);

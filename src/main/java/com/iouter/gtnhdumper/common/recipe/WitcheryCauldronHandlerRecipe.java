@@ -33,6 +33,7 @@ public class WitcheryCauldronHandlerRecipe extends BaseHandlerRecipe {
             try {
                 for (BrewActionRitualRecipe.Recipe recipe : ritual.getExpandedRecipes()) {
                     try {
+                        if (!selection.matches(recipe.result)) continue;
                         ArrayList<Object> inputItems = new ArrayList<>();
                         Arrays.stream(recipe.ingredients)
                             .filter(input -> input != null)

@@ -19,6 +19,7 @@ import com.iouter.gtnhdumper.GTNHDumper;
 import com.iouter.gtnhdumper.common.recipe.base.RecipeFluid;
 import com.iouter.gtnhdumper.common.recipe.base.RecipeItem;
 import com.iouter.gtnhdumper.common.utils.ModFilter;
+import com.iouter.gtnhdumper.common.utils.RecipeFiles;
 import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
 
 /** Adds KubaTech's final Extreme Entity Crusher recipe map to the normal recipe dump. */
@@ -28,23 +29,23 @@ public final class EECRecipeDumper {
 
     private EECRecipeDumper() {}
 
-    public static void dump() throws Exception {
+    public static boolean dump() throws Exception {
         File outputFile = ModFilter.current()
             .outputFile("recipes/kubatech/ExtremeEntityCrusher.json");
-        File parent = outputFile.getParentFile();
-        if (parent != null && !parent.exists()) {
-            parent.mkdirs();
-        }
+        JsonObject data = build();
+        ModFilter.current()
+            .filterRecipes(data);
+        if (!RecipeFiles.prepare(outputFile, data)) return false;
         try (FileWriter writer = new FileWriter(outputFile)) {
-            JsonObject data = build();
-            ModFilter.current()
-                .filterRecipes(data);
             GTNHDumper.GSON.toJson(data, writer);
         }
         GTNHDumper.info("已写入：" + outputFile.getAbsolutePath());
+        return true;
     }
 
     static JsonObject build() throws Exception {
+        com.iouter.gtnhdumper.common.utils.RecipeSelection selection = com.iouter.gtnhdumper.common.utils.RecipeSelection
+            .current();
         Map<?, ?> eecRecipes = (Map<?, ?>) field(Class.forName("kubatech.loaders.MobHandlerLoader"), "recipeMap");
         List<EECRecipe> recipes = new ArrayList<>();
         Map<String, Object> sortedRecipes = new TreeMap<>();
@@ -59,13 +60,24 @@ public final class EECRecipeDumper {
             try {
                 String entityName = entry.getKey();
                 Object eecRecipe = entry.getValue();
+                List<?> drops = (List<?>) field(eecRecipe, "mOutputs");
+                if (selection.isActive()) {
+                    boolean matches = false;
+                    for (Object drop : drops) {
+                        if (selection.matches((ItemStack) field(drop, "stack"))) {
+                            matches = true;
+                            break;
+                        }
+                    }
+                    if (!matches) continue;
+                }
                 Object mobRecipe = field(eecRecipe, "recipe");
 
                 ArrayList<Object> inputItems = new ArrayList<>();
                 inputItems.add(new RecipeItem(getPoweredSpawner(entityName)));
                 ArrayList<Object> outputItems = new ArrayList<>();
                 ArrayList<Object> otherItems = new ArrayList<>();
-                for (Object drop : (List<?>) field(eecRecipe, "mOutputs")) {
+                for (Object drop : drops) {
                     ItemStack stack = ((ItemStack) field(drop, "stack")).copy();
                     Object damages = field(drop, "damages");
                     if (stack.isItemStackDamageable() && damages instanceof Map && ((Map<?, ?>) damages).size() > 1) {

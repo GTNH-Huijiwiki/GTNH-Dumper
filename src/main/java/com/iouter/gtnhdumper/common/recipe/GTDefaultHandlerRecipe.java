@@ -98,6 +98,9 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
                     .get(storage);
                 for (EyeOfHarmonyRecipe recipe : recipeHashMap.values()) {
                     try {
+                        if (selection.isActive() && recipe.getOutputItems()
+                            .stream()
+                            .noneMatch(output -> selection.matches(output.itemStack))) continue;
                         ItemStack planetItem = recipe.getRecipeTriggerItem()
                             .copy();
                         planetItem.stackSize = 0;
@@ -157,7 +160,7 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
             .filter(
                 gtRecipe -> RecipeItemVariants.isCollecting() || !filter.isActive()
                     || filter.matchesMod(originalOwner(gtRecipe))
-                    || filter.matchesItemOutputs(gtRecipe.mOutputs))
+                    || selection.matchesItems(gtRecipe.mOutputs))
             .map(recipe -> {
                 if (!RecipeItemVariants.isCollecting()) return Transformer.transformGTRecipe(recipe);
                 try {

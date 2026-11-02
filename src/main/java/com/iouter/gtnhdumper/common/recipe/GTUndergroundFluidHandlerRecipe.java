@@ -28,6 +28,7 @@ public class GTUndergroundFluidHandlerRecipe extends BaseHandlerRecipe {
 
     @Override
     public List<?> getRecipes(IRecipeHandler handler) {
+        if (selection.isActive()) return java.util.Collections.emptyList(); // Fluid-only, no recorded source.
         List<UndergroundFluidRecipe> recipes = new ArrayList<>();
         Map<String, List<UndergroundFluidWrapper>> fluids = new TreeMap<>(GT5UndergroundFluidHelper.getAllEntries());
         for (Map.Entry<String, List<UndergroundFluidWrapper>> entry : fluids.entrySet()) {

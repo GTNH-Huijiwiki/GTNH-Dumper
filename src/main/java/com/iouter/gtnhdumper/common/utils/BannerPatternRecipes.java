@@ -20,6 +20,11 @@ public final class BannerPatternRecipes {
     private BannerPatternRecipes() {}
 
     public static List<Map<String, Object>> read(TemplateRecipeHandler handler) throws ReflectiveOperationException {
+        return read(handler, RecipeSelection.current());
+    }
+
+    public static List<Map<String, Object>> read(TemplateRecipeHandler handler, RecipeSelection selection)
+        throws ReflectiveOperationException {
         Method colour = handler.getClass()
             .getDeclaredMethod("getEnumColour", ItemStack.class);
         colour.setAccessible(true);
@@ -32,6 +37,7 @@ public final class BannerPatternRecipes {
         };
         List<Map<String, Object>> result = new ArrayList<>();
         for (TemplateRecipeHandler.CachedRecipe recipe : handler.arecipes) {
+            if (selection.isActive() && !selection.matchesStack(recipe.getResult())) continue;
             List<PositionedStack> ingredients = recipe.getIngredients();
             List<ItemStack[]> original = new ArrayList<>();
             List<ItemStack> displayed = new ArrayList<>();

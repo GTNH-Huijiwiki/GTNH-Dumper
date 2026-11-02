@@ -21,6 +21,11 @@ public final class NEIFluidTankDumper {
     private NEIFluidTankDumper() {}
 
     public static List<Map<String, Object>> dump(IRecipeHandler handler) throws Exception {
+        return dump(handler, index -> true);
+    }
+
+    public static List<Map<String, Object>> dump(IRecipeHandler handler, java.util.function.IntPredicate selected)
+        throws Exception {
         List<Map<String, Object>> recipes = new ArrayList<>();
         if (!(handler instanceof TemplateRecipeHandler template)) return recipes;
         String name = handler.getClass()
@@ -33,6 +38,7 @@ public final class NEIFluidTankDumper {
             || name.equals("crazypants.enderio.nei.VatRecipeHandler")
             || name.equals("ic2.neiIntegration.core.recipehandler.FluidCannerRecipeHandler"))) return recipes;
         for (int index = 0; index < template.arecipes.size(); index++) {
+            if (!selected.test(index)) continue;
             Object recipe = template.arecipes.get(index);
             List<Map<String, Object>> custom = customTanks(name, recipe);
             if (!custom.isEmpty()) {

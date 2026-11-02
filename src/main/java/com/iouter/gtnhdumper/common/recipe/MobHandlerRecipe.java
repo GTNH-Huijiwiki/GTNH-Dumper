@@ -91,6 +91,7 @@ public class MobHandlerRecipe extends BaseHandlerRecipe {
             if (!mobCachedRecipeClass.isInstance(cachedRecipe)) {
                 continue;
             }
+            if (selection.isActive() && !selection.matchesStacks(getMOutputs(cachedRecipe))) continue;
             String[] spawnList;
             if (getSpawnList(cachedRecipe).isEmpty()) {
                 spawnList = null;

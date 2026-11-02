@@ -69,6 +69,7 @@ public class ShapedCraftingHandlerRecipe extends BaseHandlerRecipe {
         recipeHandler.arecipes.clear();
         recipeHandler.arecipes.addAll(loaded.arecipes);
         for (TemplateRecipeHandler.CachedRecipe recipe : recipeHandler.arecipes) {
+            if (selection.isActive() && !selection.matchesStack(recipe.getResult())) continue;
             ArrayList<Object> inputItems = new ArrayList<>();
             for (PositionedStack stack : arrangeIngredients(recipe.getIngredients())) {
                 inputItems.add(stack == null ? null : RecipeUtil.getRecipeItems(stack.items));

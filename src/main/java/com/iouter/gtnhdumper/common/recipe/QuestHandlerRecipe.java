@@ -37,6 +37,7 @@ public class QuestHandlerRecipe extends BaseHandlerRecipe {
         if (RecipeItemVariants.isCollecting()) return result;
         try {
             for (TemplateRecipeHandler.CachedRecipe recipe : template.arecipes) {
+                if (selection.isActive() && !selection.matchesStacks(recipe.getOtherStacks())) continue;
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("inputItems", Utils.getRecipeItems(recipe.getIngredients()));
                 data.put("outputItems", Utils.getRecipeItems(recipe.getOtherStacks()));

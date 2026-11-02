@@ -48,6 +48,7 @@ import com.iouter.gtnhdumper.common.recipe.VendingMachineHandlerRecipe;
 import com.iouter.gtnhdumper.common.recipe.WitcheryCauldronHandlerRecipe;
 import com.iouter.gtnhdumper.common.recipe.base.BaseHandlerRecipe;
 import com.iouter.gtnhdumper.common.utils.ModFilter;
+import com.iouter.gtnhdumper.common.utils.RecipeFiles;
 import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
 import com.iouter.gtnhdumper.common.utils.Utils;
 import com.kuba6000.mobsinfo.nei.MobHandler;
@@ -270,11 +271,7 @@ public class RecipesDumper extends FilteredDataDumper {
             String fileName = "recipes/" + modID + "/" + clazz + "_" + id + ".json";
             fileName = Utils.replacePathIllegalChars(fileName);
             File file = filter.outputFile(fileName);
-            File parentDir = file.getParentFile();
-            if (parentDir != null && !parentDir.exists()) {
-                parentDir.mkdirs();
-            }
-            try (FileWriter writer = new FileWriter(file)) {
+            try {
                 JsonObject data = dumpRecipes(handler).build();
                 filter.filterRecipes(data);
                 if (data.has("sourceFilterUnsupported")) {
@@ -289,21 +286,21 @@ public class RecipesDumper extends FilteredDataDumper {
                                 .getAsLong()
                                 + " recipes have no original owner; matching item outputs are still exported; enable GregTech NEIRecipeOwner and restart for source matching");
                     }
-                GTNHDumper.GSON.toJson(data, writer);
+                if (!RecipeFiles.prepare(file, data)) continue;
+                try (FileWriter writer = new FileWriter(file)) {
+                    GTNHDumper.GSON.toJson(data, writer);
+                }
                 recipesList.add(new String[] { name });
                 GTNHDumper.info("已写入：" + file.getAbsolutePath());
             } catch (IOException e) {
-                file.deleteOnExit();
                 GTNHDumper.LOG.error(e);
             } catch (Exception e) {
                 GTNHDumper.info("导出" + name + "时发生错误：" + e.getLocalizedMessage());
-                file.deleteOnExit();
                 GTNHDumper.LOG.error(e);
             }
         }
         if (CommonProxy.isKubaTechLoaded) try {
-            EECRecipeDumper.dump();
-            recipesList.add(new String[] { EECRecipeDumper.RECIPE_NAME });
+            if (EECRecipeDumper.dump()) recipesList.add(new String[] { EECRecipeDumper.RECIPE_NAME });
         } catch (Exception e) {
             GTNHDumper.info("导出" + EECRecipeDumper.RECIPE_NAME + "时发生错误：" + e.getLocalizedMessage());
             GTNHDumper.LOG.error(e);
@@ -315,8 +312,13 @@ public class RecipesDumper extends FilteredDataDumper {
                     "Original registering mod is not recorded; matching item outputs are still exported");
             }
             File report = filter.outputFile("recipes_filter_report.json");
-            try (FileWriter writer = new FileWriter(report)) {
-                GTNHDumper.GSON.toJson(skipped, writer);
+            try {
+                java.nio.file.Files.createDirectories(
+                    report.getParentFile()
+                        .toPath());
+                try (FileWriter writer = new FileWriter(report)) {
+                    GTNHDumper.GSON.toJson(skipped, writer);
+                }
             } catch (IOException e) {
                 GTNHDumper.LOG.error("Could not write recipe source filter report", e);
             }

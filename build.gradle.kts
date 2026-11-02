@@ -96,8 +96,21 @@ val checkRecipeOutputFilter by tasks.registering(JavaExec::class) {
     mainClass.set("com.iouter.gtnhdumper.common.utils.RecipeOutputFilterRegression")
 }
 
+// Headless NEI initialization still links Minecraft's LWJGL 2 DisplayMode constructor.
+val recipeSelectionLwjgl by configurations.creating
+dependencies {
+    add(recipeSelectionLwjgl.name, "org.lwjgl.lwjgl:lwjgl:2.9.4-nightly-20150209")
+}
+
+val checkRecipeSelection by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Checks native output preselection, selected-only tank extraction and empty recipe files."
+    classpath(recipeSelectionLwjgl, configurations.compileClasspath, functionalTest.runtimeClasspath, sourceSets.main.get().output, sourceSets.patchedMc.get().output)
+    mainClass.set("com.iouter.gtnhdumper.common.utils.RecipeSelectionRegression")
+}
+
 tasks.check.configure {
-    dependsOn(checkModFilter, checkDeferredRecipeSource, checkRecipeOutputFilter)
+    dependsOn(checkModFilter, checkDeferredRecipeSource, checkRecipeOutputFilter, checkRecipeSelection)
 }
 
 // Run tests in the default runServer/runClient configurations

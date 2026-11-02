@@ -39,6 +39,7 @@ public class ForestryHandlerRecipe extends BaseHandlerRecipe {
             breeding.arecipes.stream()
                 .filter(BaseBreedingRecipeHandler.CachedBreedingRecipe.class::isInstance)
                 .map(BaseBreedingRecipeHandler.CachedBreedingRecipe.class::cast)
+                .filter(recipe -> !selection.isActive() || selection.matchesStack(recipe.getResult()))
                 .forEachOrdered(
                     recipe -> recipes.add(
                         new ForestryRecipe().setInputItems(RecipeUtil.getRecipeItemList(recipe.getIngredients()))
@@ -48,13 +49,14 @@ public class ForestryHandlerRecipe extends BaseHandlerRecipe {
         } else if (handler instanceof BaseProduceRecipeHandler produce) {
             for (IAlleleSpecies species : produce.getAllSpecies()) {
                 try {
+                    Map<ItemStack, Float> products = net.bdew.neiaddons.Utils
+                        .mergeStacks(GeneticsUtils.getProduceFromSpecies(species));
+                    if (!selection.matchesItems(products.keySet())) continue;
                     ForestryRecipe recipe = new ForestryRecipe();
                     ItemStack inputStack = GeneticsUtils
                         .stackFromSpecies(species, GeneticsUtils.RecipePosition.Producer);
                     recipe.setInputItems(new RecipeItem(inputStack));
-                    for (Map.Entry<ItemStack, Float> product : net.bdew.neiaddons.Utils
-                        .mergeStacks(GeneticsUtils.getProduceFromSpecies(species))
-                        .entrySet()) {
+                    for (Map.Entry<ItemStack, Float> product : products.entrySet()) {
                         recipe.setOutputItems(
                             new RecipeItem(product.getKey()).withChance((int) (product.getValue() * 10000)));
                     }
