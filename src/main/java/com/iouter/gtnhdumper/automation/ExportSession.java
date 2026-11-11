@@ -54,6 +54,7 @@ import com.iouter.gtnhdumper.common.dumper.QuestDumper;
 import com.iouter.gtnhdumper.common.dumper.QuestLineDumper;
 import com.iouter.gtnhdumper.common.dumper.RecipesDumper;
 import com.iouter.gtnhdumper.common.dumper.TC4ResearchDumper;
+import com.iouter.gtnhdumper.common.dumper.TC4ThaumonomiconDumper;
 import com.iouter.gtnhdumper.common.dumper.TICMaterialDumper;
 import com.iouter.gtnhdumper.common.utils.ModFilter;
 import com.iouter.gtnhdumper.common.utils.RecipeCoverage;
@@ -596,9 +597,14 @@ public final class ExportSession {
         tasks.add(task);
     }
 
+    private void addThaumcraft() {
+        add("tc4research", new TC4ResearchDumper(), 0);
+        add("tc4thaumonomicon", new TC4ThaumonomiconDumper(), 0);
+    }
+
     private void planTasks() {
         if (options.researchOnly) {
-            add("tc4research", new TC4ResearchDumper(), 0);
+            addThaumcraft();
             return;
         }
         if (options.layoutsOnly) {
@@ -638,7 +644,7 @@ public final class ExportSession {
                 tasks.add(new ExportTask("structures", () -> new GTStructuresDumper().dumpFile()));
         }
         if (CommonProxy.isTiCLoaded) add("ticmaterial", new TICMaterialDumper(), 1);
-        if (CommonProxy.isTCLoaded) add("tc4research", new TC4ResearchDumper(), 0);
+        if (CommonProxy.isTCLoaded) addThaumcraft();
         if (CommonProxy.isBQLoaded) {
             add("quest", new QuestDumper(), 0);
             add("questline", new QuestLineDumper(), 0);

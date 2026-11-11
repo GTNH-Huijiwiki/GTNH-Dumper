@@ -16,6 +16,7 @@ import com.iouter.gtnhdumper.common.dumper.QuestDumper;
 import com.iouter.gtnhdumper.common.dumper.QuestLineDumper;
 import com.iouter.gtnhdumper.common.dumper.RecipesDumper;
 import com.iouter.gtnhdumper.common.dumper.TC4ResearchDumper;
+import com.iouter.gtnhdumper.common.dumper.TC4ThaumonomiconDumper;
 import com.iouter.gtnhdumper.common.dumper.TICMaterialDumper;
 
 import codechicken.nei.api.API;
@@ -42,7 +43,10 @@ public class NEIConfig implements IConfigureNEI {
             }
         }
         if (CommonProxy.isTiCLoaded) API.addOption(new TICMaterialDumper());
-        if (CommonProxy.isTCLoaded) API.addOption(new TC4ResearchDumper());
+        if (CommonProxy.isTCLoaded) {
+            API.addOption(new TC4ResearchDumper());
+            API.addOption(new TC4ThaumonomiconDumper());
+        }
         if (CommonProxy.isBQLoaded) {
             API.addOption(new QuestDumper());
             API.addOption(new QuestLineDumper());
