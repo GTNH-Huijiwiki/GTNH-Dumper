@@ -17,8 +17,8 @@ final class ExportOutput {
 
     private static final String[] DATA_FILES = { "advitempanel.json", "oreDictionary.json", "fluid.json",
         "gtmaterial.json", "gtorevein.json", "gtsmallorevein.json", "gtundergroundfluid.json", "gtnhdimension.json",
-        "ticmaterial.json", "tc4research.json", "quest.json", "questline.json", "recipes_filter_report.json",
-        "structure-failures.json" };
+        "ticmaterial.json", "tc4research.json", "tc4thaumonomicon.json", "quest.json", "questline.json",
+        "recipes_filter_report.json", "structure-failures.json" };
 
     final Path runDirectory;
     final Path outputDirectory;
@@ -74,6 +74,8 @@ final class ExportOutput {
         List<Path> deletionOrder = new ArrayList<>();
         if (options.researchOnly) {
             collectForDeletion(outputDirectory.resolve("tc4research.json"), false, deletionOrder);
+            collectForDeletion(outputDirectory.resolve("tc4thaumonomicon.json"), false, deletionOrder);
+            collectForDeletion(outputDirectory.resolve("tc4thaumonomicon-assets"), true, deletionOrder);
         } else if (options.layoutsOnly) {
             collectForDeletion(outputDirectory.resolve("nei-layouts"), true, deletionOrder);
         } else if (options.smoke) {
@@ -81,6 +83,7 @@ final class ExportOutput {
         } else {
             collectForDeletion(outputDirectory.resolve("recipes"), true, deletionOrder);
             collectForDeletion(outputDirectory.resolve("structures"), true, deletionOrder);
+            collectForDeletion(outputDirectory.resolve("tc4thaumonomicon-assets"), true, deletionOrder);
             for (String name : DATA_FILES) {
                 collectForDeletion(outputDirectory.resolve(name), false, deletionOrder);
             }
