@@ -6,7 +6,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
-import net.minecraft.nbt.JsonToNBT;
 import net.minecraft.nbt.NBTBase;
 import net.minecraft.nbt.NBTTagCompound;
 
@@ -26,7 +25,7 @@ public final class RecipeNbtDependencies {
             if (object.has("key") && object.has("nbt") && object.get("key").isJsonPrimitive()
                 && object.get("nbt").isJsonPrimitive()) {
                 try {
-                    NBTBase tag = JsonToNBT.func_150315_a(object.get("nbt").getAsString());
+                    NBTBase tag = LegacyNbtParser.parse(object.get("nbt").getAsString());
                     if (tag instanceof NBTTagCompound compound && !compound.hasNoTags()) {
                         identities.add(new Identity(object.get("key").getAsString(), compound));
                     }

@@ -45,6 +45,16 @@ public final class RecipeNbtDependenciesRegression {
         NBTTagCompound expected = new NBTTagCompound();
         expected.setBoolean("message", true);
         check(visits[0] == 1 && jsonOnly.contains("test:toolbox", expected), "Enumeration does not mutate identity");
+        NBTTagCompound namespaced = new NBTTagCompound();
+        namespaced.setBoolean("gt5u.toolbox:DisplayCraftingMessage", true);
+        namespaced.setString("literal", "text,{not:a:key:1b}");
+        net.minecraft.nbt.NBTTagList children = new net.minecraft.nbt.NBTTagList();
+        NBTTagCompound child = new NBTTagCompound();
+        child.setInteger("mod:nested:key", 3);
+        children.appendTag(child);
+        namespaced.setTag("children", children);
+        check(namespaced.equals(LegacyNbtParser.parse(namespaced.toString())),
+            "Namespaced keys round-trip without changing strings or nested list order");
         System.out.println("Recipe NBT dependency regression passed");
     }
 
