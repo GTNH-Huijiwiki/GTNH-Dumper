@@ -28,9 +28,12 @@ public final class RecipeItemVariants {
     private static final Logger LOG = LogManager.getLogger(Tags.MODID);
     private static final ThreadLocal<RecipeItemVariants> ACTIVE = new ThreadLocal<>();
     private static List<ItemStack> cached;
+    private static String dependencyModId;
+    private static RecipeNbtDependencies dependencies = new RecipeNbtDependencies();
     private static int cachedFailures;
     private static Map<String, String> lastFailures = new LinkedHashMap<>();
     private final Map<Key, ItemStack> stacks = new LinkedHashMap<>();
+    private final RecipeNbtDependencies recipeDependencies = new RecipeNbtDependencies();
     private int failures;
     private final Map<String, String> failureDetails = new LinkedHashMap<>();
 
@@ -140,7 +143,23 @@ public final class RecipeItemVariants {
     }
 
     public static List<ItemStack> get() {
+        String modId = ModFilter.current().modId();
+        if (!Objects.equals(dependencyModId, modId)) {
+            cached = null;
+            AllItemStacks.invalidateRecipeScope();
+        }
+        dependencyModId = modId;
         return get(RecipesDumper::collectItemVariants);
+    }
+
+    public static void captureDependencies(com.google.gson.JsonObject recipes) {
+        RecipeItemVariants collector = ACTIVE.get();
+        ModFilter.current().filterRecipes(recipes);
+        collector.recipeDependencies.add(recipes.get("recipes"));
+    }
+
+    public static boolean isRecipeDependency(ItemStack stack) {
+        return dependencies.contains(Utils.getItemKey(stack), stack.getTagCompound());
     }
 
     private static synchronized List<ItemStack> get(Runnable scan) {
@@ -150,7 +169,10 @@ public final class RecipeItemVariants {
         ACTIVE.set(collector);
         try {
             scan.run();
+            // Include NBT variants declared only in recipe JSON.
+            collector.recipeDependencies.forEach(RecipeItemVariants::captureDeclaredDependency);
             result = new ArrayList<>(collector.stacks.values());
+            dependencies = collector.recipeDependencies;
             cachedFailures = collector.failures;
             lastFailures = new LinkedHashMap<>(collector.failureDetails);
             // A transient adapter failure must not poison every later export in this session.
@@ -164,6 +186,29 @@ public final class RecipeItemVariants {
                 + collector.failures
                 + " failures (see log). Only variants enumerable by installed recipe adapters are included.");
         return result;
+    }
+
+    private static void captureDeclaredDependency(String rawKey, NBTTagCompound tag) {
+        captureDeclaredDependency(rawKey, tag, name -> Item.itemRegistry.getObject(name));
+    }
+
+    private static void captureDeclaredDependency(String rawKey, NBTTagCompound tag,
+        java.util.function.Function<String, Object> lookup) {
+        if (rawKey.startsWith("#") || rawKey.indexOf(':') < 0) return;
+        int separator = rawKey.lastIndexOf(':');
+        boolean hasMetadata = separator > rawKey.indexOf(':');
+        String registryName = hasMetadata ? rawKey.substring(0, separator) : rawKey;
+        Object registered = lookup.apply(registryName);
+        if (!(registered instanceof Item item)) {
+            reportFailure("NBT dependency: " + rawKey, new IllegalStateException("Unregistered recipe item"));
+            return;
+        }
+        int metadata = hasMetadata ? Integer.parseInt(rawKey.substring(separator + 1)) : 0;
+        ItemStack stack = new ItemStack(item, 1, metadata);
+        stack.setTagCompound(tag);
+        RecipeItemVariants collector = ACTIVE.get();
+        if (collector.stacks.containsKey(new Key(stack))) return;
+        capture(stack);
     }
 
     public static boolean isComplete() {

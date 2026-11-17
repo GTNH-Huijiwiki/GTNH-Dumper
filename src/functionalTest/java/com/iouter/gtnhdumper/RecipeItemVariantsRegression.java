@@ -199,6 +199,29 @@ public final class RecipeItemVariantsRegression {
             get.invoke(null, complete) == completeResult && scans[0] == 2,
             "Successful scans must be shared across item/icon exports");
         check(!RecipeItemVariants.isCollecting(), "Retry must release collection scope");
+        Item declaredItem = new Item();
+        RecipeItemVariants declaredCollector = constructor.newInstance();
+        active.set(declaredCollector);
+        try {
+            Method declared = RecipeItemVariants.class.getDeclaredMethod(
+                "captureDeclaredDependency", String.class, NBTTagCompound.class, java.util.function.Function.class);
+            declared.setAccessible(true);
+            NBTTagCompound declaredTag = new NBTTagCompound();
+            declaredTag.setBoolean("message", true);
+            java.util.function.Function<String, Object> lookup = name -> {
+                check(name.equals("regression:declared_nbt"), "Resolve registry name separately from metadata");
+                return declaredItem;
+            };
+            declared.invoke(null, "regression:declared_nbt:5", declaredTag, lookup);
+            Map<?, ItemStack> declaredStacks = (Map<?, ItemStack>) stacksField.get(declaredCollector);
+            check(declaredStacks.size() == 1, "A JSON-only NBT identity becomes an exported stack");
+            ItemStack declaredStack = declaredStacks.values().iterator().next();
+            declaredTag.setBoolean("message", false);
+            check(declaredStack.getItem() == declaredItem && declaredStack.getItemDamage() == 5
+                && declaredStack.getTagCompound().getBoolean("message"), "Declared item, metadata and copied NBT retained");
+        } finally {
+            active.remove();
+        }
         System.out.println("Recipe item variant regression checks passed");
     }
 
