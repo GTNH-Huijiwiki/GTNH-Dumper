@@ -50,7 +50,7 @@ public abstract class BaseHandlerRecipe {
                     e);
             }
             // Some adapters return raw ItemStacks; retain their normal serializer capture path.
-            serializeRecipes(handler);
+            json.add("recipes", serializeRecipes(handler));
             return;
         }
         json.addProperty("name", handler.getRecipeName());
