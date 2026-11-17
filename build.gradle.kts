@@ -220,3 +220,11 @@ val checkRecipeNbtDependencies by tasks.registering(JavaExec::class) {
 }
 
 tasks.check.configure { dependsOn(checkRecipeNbtDependencies) }
+
+val checkItemIdSerializer by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Checks immutable item identities in addon recipe metadata."
+    classpath(configurations.compileClasspath, functionalTest.runtimeClasspath, sourceSets.main.get().output, sourceSets.patchedMc.get().output)
+    mainClass.set("com.iouter.gtnhdumper.ItemIdSerializerRegression")
+}
+tasks.check.configure { dependsOn(checkItemIdSerializer) }

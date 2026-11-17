@@ -39,6 +39,7 @@ import com.iouter.gtnhdumper.common.serializer.AspectSerializer;
 import com.iouter.gtnhdumper.common.serializer.ElementSerializer;
 import com.iouter.gtnhdumper.common.serializer.FluidStackSerializer;
 import com.iouter.gtnhdumper.common.serializer.ItemStackSerializer;
+import com.iouter.gtnhdumper.common.serializer.ItemIdSerializer;
 import com.iouter.gtnhdumper.common.serializer.MaterialsSerializer;
 import com.iouter.gtnhdumper.common.serializer.NBTTagCompoundSerializer;
 import com.iouter.gtnhdumper.common.serializer.RecipeItemSerializer;
@@ -289,6 +290,7 @@ public class Utils {
             .disableHtmlEscaping()
             .registerTypeAdapter(RecipeItem.class, new RecipeItemSerializer())
             .registerTypeAdapter(ItemStack.class, new ItemStackSerializer())
+            .registerTypeAdapter(com.gtnewhorizon.gtnhlib.util.data.ItemId.class, new ItemIdSerializer())
             .registerTypeAdapter(FluidStack.class, new FluidStackSerializer())
             .registerTypeAdapter(NBTTagCompound.class, new NBTTagCompoundSerializer());
         if (CommonProxy.isGTLoaded) {
