@@ -65,6 +65,8 @@ public class ItemIconDumper extends WikiDumper {
     private static final Object2IntOpenHashMap<ItemStack> frameCountMap = new Object2IntOpenHashMap<>();
     private static final Object2IntOpenHashMap<ItemStack> dynamicSizeMap = new Object2IntOpenHashMap<>();
     private static final Map<Integer, FBOHelper> fbos = new HashMap<>();
+    /** Experiment: animations whose frame strip would not fit in memory; exported as still images. */
+    private static final Map<String, String> OVERSIZED_ANIMATIONS = new LinkedHashMap<>();
     private static JsonObject resume;
     private static int resumedIcons;
     private static final Map<String, Integer> unregisteredItems = new LinkedHashMap<>();
@@ -269,6 +271,9 @@ public class ItemIconDumper extends WikiDumper {
             metrics.put("writtenImages", writer.count());
             metrics.put("resumedIcons", resumedIcons);
             metrics.put("excludedUnregisteredItems", unregisteredItems);
+            synchronized (OVERSIZED_ANIMATIONS) {
+                metrics.put("oversizedAnimations", new LinkedHashMap<>(OVERSIZED_ANIMATIONS));
+            }
             metrics.put("wallNanos", System.nanoTime() - started);
             metrics.put("encodingAndWriteTaskNanos", writer.encodeNanos());
             try {
@@ -719,7 +724,24 @@ public class ItemIconDumper extends WikiDumper {
         String staticName, String dynamicName) {
         int frameCount = dynamicTexture.lcm;
         boolean is3dBlockItem = is3dBlockItem(itemStack);
-        FBOHelper dynamicFbo = getFbo(is3dBlockItem ? SINGLE_FRAME_SIZE : getDynamicTextureSize(dynamicTexture));
+        int frameSize = is3dBlockItem ? SINGLE_FRAME_SIZE : getDynamicTextureSize(dynamicTexture);
+        long stripBytes = (long) frameCount * frameSize * frameSize * 4L;
+        // Experiment: the strip is the least common multiple of all animation lengths; it can exceed the heap.
+        GTNHDumper.LOG.info(
+            "Dynamic icon {} frames={} frameSize={} stripMB={}",
+            staticName,
+            frameCount,
+            frameSize,
+            stripBytes >> 20);
+        if (stripBytes > 512L * 1024 * 1024) {
+            synchronized (OVERSIZED_ANIMATIONS) {
+                OVERSIZED_ANIMATIONS.put(staticName, frameCount + "x" + frameSize + "px=" + (stripBytes >> 20) + "MB");
+            }
+            BufferedImage still = renderItem(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer, 1f, null);
+            FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
+            return;
+        }
+        FBOHelper dynamicFbo = getFbo(frameSize);
         BufferedImage[] images = new BufferedImage[frameCount];
         try {
             for (int i = 0; i < frameCount; i++) {
