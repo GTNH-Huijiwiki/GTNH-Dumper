@@ -204,7 +204,10 @@ public final class RecipeItemVariantsRegression {
         active.set(declaredCollector);
         try {
             Method declared = RecipeItemVariants.class.getDeclaredMethod(
-                "captureDeclaredDependency", String.class, NBTTagCompound.class, java.util.function.Function.class);
+                "captureDeclaredDependency",
+                String.class,
+                NBTTagCompound.class,
+                java.util.function.Function.class);
             declared.setAccessible(true);
             NBTTagCompound declaredTag = new NBTTagCompound();
             declaredTag.setBoolean("message", true);
@@ -215,10 +218,15 @@ public final class RecipeItemVariantsRegression {
             declared.invoke(null, "regression:declared_nbt:5", declaredTag, lookup);
             Map<?, ItemStack> declaredStacks = (Map<?, ItemStack>) stacksField.get(declaredCollector);
             check(declaredStacks.size() == 1, "A JSON-only NBT identity becomes an exported stack");
-            ItemStack declaredStack = declaredStacks.values().iterator().next();
+            ItemStack declaredStack = declaredStacks.values()
+                .iterator()
+                .next();
             declaredTag.setBoolean("message", false);
-            check(declaredStack.getItem() == declaredItem && declaredStack.getItemDamage() == 5
-                && declaredStack.getTagCompound().getBoolean("message"), "Declared item, metadata and copied NBT retained");
+            check(
+                declaredStack.getItem() == declaredItem && declaredStack.getItemDamage() == 5
+                    && declaredStack.getTagCompound()
+                        .getBoolean("message"),
+                "Declared item, metadata and copied NBT retained");
         } finally {
             active.remove();
         }

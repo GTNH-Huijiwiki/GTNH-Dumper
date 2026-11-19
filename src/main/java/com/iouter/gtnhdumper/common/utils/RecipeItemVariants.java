@@ -143,7 +143,8 @@ public final class RecipeItemVariants {
     }
 
     public static List<ItemStack> get() {
-        String modId = ModFilter.current().modId();
+        String modId = ModFilter.current()
+            .modId();
         if (!Objects.equals(dependencyModId, modId)) {
             cached = null;
             AllItemStacks.invalidateRecipeScope();
@@ -154,7 +155,8 @@ public final class RecipeItemVariants {
 
     public static void captureDependencies(com.google.gson.JsonObject recipes) {
         RecipeItemVariants collector = ACTIVE.get();
-        ModFilter.current().filterRecipes(recipes);
+        ModFilter.current()
+            .filterRecipes(recipes);
         collector.recipeDependencies.add(recipes.get("recipes"));
     }
 

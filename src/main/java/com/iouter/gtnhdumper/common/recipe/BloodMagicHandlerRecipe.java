@@ -10,7 +10,6 @@ import java.util.Map;
 
 import com.iouter.gtnhdumper.common.recipe.base.BaseHandlerRecipe;
 import com.iouter.gtnhdumper.common.recipe.base.RecipeItem;
-import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
 import com.iouter.gtnhdumper.common.utils.RecipeUtil;
 import com.iouter.gtnhdumper.common.utils.Utils;
 

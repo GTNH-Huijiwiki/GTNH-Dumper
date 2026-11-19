@@ -22,12 +22,21 @@ public final class RecipeNbtDependencies {
             for (JsonElement child : value.getAsJsonArray()) add(child);
         } else if (value.isJsonObject()) {
             JsonObject object = value.getAsJsonObject();
-            if (object.has("key") && object.has("nbt") && object.get("key").isJsonPrimitive()
-                && object.get("nbt").isJsonPrimitive()) {
+            if (object.has("key") && object.has("nbt")
+                && object.get("key")
+                    .isJsonPrimitive()
+                && object.get("nbt")
+                    .isJsonPrimitive()) {
                 try {
-                    NBTBase tag = LegacyNbtParser.parse(object.get("nbt").getAsString());
+                    NBTBase tag = LegacyNbtParser.parse(
+                        object.get("nbt")
+                            .getAsString());
                     if (tag instanceof NBTTagCompound compound && !compound.hasNoTags()) {
-                        identities.add(new Identity(object.get("key").getAsString(), compound));
+                        identities.add(
+                            new Identity(
+                                object.get("key")
+                                    .getAsString(),
+                                compound));
                     }
                 } catch (net.minecraft.nbt.NBTException error) {
                     throw new IllegalArgumentException("Invalid NBT in recipe dependency", error);
