@@ -15,6 +15,39 @@
 界面固定显示斜杠分隔的时间列表。
 旧记录继续使用自身的流体和耗时。
 
+## 魔导手册（Thaumonomicon）导出
+
+NEI 选项 → 工具 → 数据导出 → GTNH Dumper 里的 **TC4 Thaumonomicon** 一次导出整本手册，
+写入 `tc4thaumonomicon.json`，并把用到的贴图复制到 `tc4thaumonomicon-assets/<域名>/<路径>`。
+自动导出（`researchOnly` 或全量）也会生成它。文件包含 `tc4research.json` 的全部字段（同名同值），
+因此可以完全替代它；`tc4research.json` 仍照常导出。
+
+顶层分三段，都是按注册顺序排列的映射：
+
+- `categories`（键为分类 key）：`Name`、`Order`、`Icon`、`Background`（贴图 id）、
+  `MinColumn/MinRow/MaxColumn/MaxRow`（浏览器滚动范围）、`ResearchCount`。
+- `aspects`（键为要素 tag，如 `ignis`）：`Name`、`Description`、`Color`、`IsPrimal`、
+  `Components`（合成它的两个 tag，基础要素没有）、`Image`、`Blend`。
+- `researches`（键为研究 key）：
+  - 位置与外观：`Category`（本地化分类名，同旧文件）、`CategoryKey`（分类 key）、`Column`、`Row`（手册网格坐标）、`Icon`（物品）或 `IconResource`（贴图）、
+    `IsSpecial/IsRound/IsSecondary/IsStub/IsVirtual/IsConcealed/IsHidden/IsLost/IsAutoUnlock`。
+  - 依赖：`Parents`、`ParentsHidden`、`Siblings`。
+  - 研究内容：`Aspects`（所需要素及数量）、`Complexity`、`Warp`、`Description`。
+  - 触发：`ItemTriggers/EntityTriggers/AspectTriggers` 为本地化名称（与旧文件一致），
+    `ItemTriggerItems/EntityTriggerIds/AspectTriggerTags` 为对应的物品、实体 ID、要素 tag；
+    `KillerTriggers` 为 Automagy 的击杀线索。
+  - `Pages`：手册页面，每页 `{"type": ...}`。
+    `text`/`text_concealed`/`image`/`aspects` 为文字、条件文字、插图、要素列表；
+    `normal_crafting`/`arcane_crafting`/`crucible_crafting`/`infusion_crafting`/`infusion_enchantment`
+    的 `recipes` 数组为同页轮播的各个配方；`compound_crafting` 为结构页，`blocks` 给出每块的 x/y/z；
+    `smelting` 为熔炼。物品槽沿用配方导出的格式（物品、候选数组、`#矿辞`，空槽为 null）。
+    无法识别的页面或配方输出 `unsupported` 并记录类名。
+  - `sourceMod`：与 `tc4research.json` 相同。
+
+页面文字保持 Thaumcraft 原样：`<BR>` 换行，`<LINE>` 分隔线，
+`<IMG>域名:路径:u:v:宽:高:缩放</IMG>` 插图（引用的贴图已一并复制），`§` 为格式码。文字使用游戏当前语言。
+启用 Mod 筛选时只导出该 Mod 的研究和它们所在的分类，不导出要素。
+
 ## 按 Mod 导出
 
 在游戏内打开 **NEI 选项 → 工具 → 数据导出 → GTNH Dumper**，在 **Mod 筛选 / Mod filter**
