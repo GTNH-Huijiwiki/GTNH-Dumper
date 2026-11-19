@@ -60,6 +60,23 @@ public final class RecipeNbtDependenciesRegression {
         check(
             namespaced.equals(LegacyNbtParser.parse(namespaced.toString())),
             "Namespaced keys round-trip without changing strings or nested list order");
+        // EnhancedLootBags lists an OpenComputers loot disk whose string tag itself contains quotes.
+        NBTTagCompound quotedValue = new NBTTagCompound();
+        NBTTagCompound disk = new NBTTagCompound();
+        disk.setString("oc:lootFactory", "\"OpenComputers:plan9k\"");
+        quotedValue.setTag("oc:data", disk);
+        NBTTagCompound diskDisplay = new NBTTagCompound();
+        diskDisplay.setString("Name", "Plan9k (Operating System)");
+        quotedValue.setTag("display", diskDisplay);
+        check(
+            quotedValue.equals(LegacyNbtParser.parse(quotedValue.toString())),
+            "String tags containing unescaped quotes round-trip");
+        RecipeNbtDependencies loot = new RecipeNbtDependencies();
+        com.google.gson.JsonObject lootItem = new com.google.gson.JsonObject();
+        lootItem.addProperty("key", "OpenComputers:item:4");
+        lootItem.addProperty("nbt", quotedValue.toString());
+        loot.add(lootItem);
+        check(loot.contains("OpenComputers:item:4", quotedValue), "Quoted loot disk dependency is retained");
         System.out.println("Recipe NBT dependency regression passed");
     }
 
