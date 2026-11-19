@@ -100,7 +100,7 @@ public class QuestDumper extends WikiDumper {
                 IReward reward = rewardEntry.getValue();
                 Map<String, Object> rewardMap = getReward(reward);
                 if (rewardMap != null) {
-                    taskList.add(rewardMap);
+                    rewardList.add(rewardMap);
                 }
             }
             list.add(

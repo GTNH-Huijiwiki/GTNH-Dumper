@@ -16,7 +16,6 @@ import net.minecraftforge.fluids.FluidTank;
 import com.iouter.gtnhdumper.common.recipe.base.BaseHandlerRecipe;
 import com.iouter.gtnhdumper.common.recipe.base.RecipeFluid;
 import com.iouter.gtnhdumper.common.recipe.base.RecipeItem;
-import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
 import com.iouter.gtnhdumper.common.utils.RecipeUtil;
 import com.iouter.gtnhdumper.common.utils.Utils;
 
@@ -73,7 +72,6 @@ public class NEIDisplayHandlerRecipe extends BaseHandlerRecipe {
         template.arecipes.clear();
         template.arecipes.addAll(loaded.arecipes);
         List<Map<String, Object>> result = new ArrayList<>();
-        if (RecipeItemVariants.isCollecting()) return result;
         String name = handler.getClass()
             .getSimpleName();
         java.util.BitSet selected = selection.selectIndexes(template.arecipes, recipe -> matchesOutput(name, recipe));

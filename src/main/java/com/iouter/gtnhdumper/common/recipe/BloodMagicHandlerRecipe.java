@@ -10,7 +10,6 @@ import java.util.Map;
 
 import com.iouter.gtnhdumper.common.recipe.base.BaseHandlerRecipe;
 import com.iouter.gtnhdumper.common.recipe.base.RecipeItem;
-import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
 import com.iouter.gtnhdumper.common.utils.RecipeUtil;
 import com.iouter.gtnhdumper.common.utils.Utils;
 
@@ -80,7 +79,6 @@ public class BloodMagicHandlerRecipe extends BaseHandlerRecipe {
         template.arecipes.clear();
         template.arecipes.addAll(loaded.arecipes);
         List<Map<String, Object>> result = new ArrayList<>();
-        if (RecipeItemVariants.isCollecting()) return result;
         boolean meteor = "alchemicalwizardry.meteor".equals(handler.getOverlayIdentifier());
         try {
             List<?> meteors = java.util.Collections.emptyList();

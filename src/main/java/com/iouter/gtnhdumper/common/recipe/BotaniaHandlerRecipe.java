@@ -9,7 +9,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.StatCollector;
 
 import com.iouter.gtnhdumper.common.recipe.base.BaseHandlerRecipe;
-import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
 import com.iouter.gtnhdumper.common.utils.Utils;
 
 import codechicken.nei.recipe.IRecipeHandler;
@@ -29,7 +28,6 @@ public class BotaniaHandlerRecipe extends BaseHandlerRecipe {
         template.arecipes.clear();
         template.arecipes.addAll(loaded.arecipes);
         List<Map<String, Object>> result = new ArrayList<>();
-        if (RecipeItemVariants.isCollecting()) return result;
         String field = handler.getClass()
             .getSimpleName()
             .equals("RecipeHandlerRunicAltar") ? "manaUsage" : "mana";

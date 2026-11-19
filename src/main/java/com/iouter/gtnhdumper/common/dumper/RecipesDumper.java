@@ -209,7 +209,7 @@ public class RecipesDumper extends FilteredDataDumper {
             List<TemplateRecipeHandler.CachedRecipe> previous = template == null ? null
                 : new ArrayList<>(template.arecipes);
             try {
-                dumpRecipes(handler).build();
+                RecipeItemVariants.captureDependencies(dumpRecipes(handler).build());
             } catch (Exception | LinkageError e) {
                 RecipeItemVariants.reportFailure(
                     handler.getClass()
@@ -232,7 +232,7 @@ public class RecipesDumper extends FilteredDataDumper {
         }
         if (CommonProxy.isKubaTechLoaded) {
             try {
-                EECRecipeDumper.build();
+                RecipeItemVariants.captureDependencies(EECRecipeDumper.build());
             } catch (Exception | LinkageError e) {
                 RecipeItemVariants.reportFailure(EECRecipeDumper.RECIPE_NAME, e);
             }

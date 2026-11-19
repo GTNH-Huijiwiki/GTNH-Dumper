@@ -26,6 +26,11 @@ public class AllItemStacks {
 
     private AllItemStacks() {}
 
+    static void invalidateRecipeScope() {
+        allItemStacks = null;
+        registryNames = null;
+    }
+
     public static List<ItemStack> getAllItemStacks() {
         List<ItemStack> result = allItemStacks;
         if (result == null) {
@@ -85,9 +90,11 @@ public class AllItemStacks {
     public static List<ItemStack> getFilteredItemStacks() {
         ModFilter filter = ModFilter.current();
         if (!filter.isActive()) return getAllItemStacks();
+        RecipeItemVariants.get();
         List<ItemStack> result = new ArrayList<>();
         for (ItemStack stack : getAllItemStacks()) {
-            if (filter.matchesItem(stack, registryNames.get(stack))) result.add(stack);
+            if (filter.matchesItem(stack, registryNames.get(stack)) || RecipeItemVariants.isRecipeDependency(stack))
+                result.add(stack);
         }
         return result;
     }
