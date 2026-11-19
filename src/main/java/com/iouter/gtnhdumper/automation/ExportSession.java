@@ -609,6 +609,10 @@ public final class ExportSession {
                 new File(runDirectory, "recipe-scan-failures.json").toPath(),
                 GTNHDumper.GSON.toJson(RecipeItemVariants.failureDetails())
                     .getBytes(StandardCharsets.UTF_8));
+            Files.write(
+                new File(runDirectory, "item-variants-timing.json").toPath(),
+                GTNHDumper.GSON.toJson(com.iouter.gtnhdumper.common.utils.ScanTiming.report())
+                    .getBytes(StandardCharsets.UTF_8));
             if (!RecipeItemVariants.isComplete()) throw new IllegalStateException("Recipe item scan incomplete");
         }));
         if (!options.noImages) add("itemicon", new ItemIconDumper(), 0);
