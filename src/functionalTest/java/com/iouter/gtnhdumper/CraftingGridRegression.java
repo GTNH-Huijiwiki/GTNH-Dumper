@@ -53,7 +53,6 @@ public final class CraftingGridRegression {
         reject(Collections.singletonList(stack(43, 7, 1)));
         BannerPatternRegression.main(args);
         com.iouter.gtnhdumper.common.utils.AddonHandlerRegression.main(args);
-        com.iouter.gtnhdumper.common.utils.StructureShapeRegression.main(args);
         System.out.println("Crafting grid regression passed");
     }
 

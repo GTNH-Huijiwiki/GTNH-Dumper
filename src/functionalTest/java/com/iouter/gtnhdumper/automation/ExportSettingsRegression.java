@@ -50,7 +50,7 @@ public final class ExportSettingsRegression {
             check(
                 !defaults.has("runId") && !defaults.has("imageKeys") && !defaults.has("imageMetadata"),
                 "Generated IDs and optional filters must stay absent");
-            for (String flag : new String[] { "keepWorld", "smoke", "layoutsOnly", "imagesOnly", "researchOnly",
+            for (String flag : new String[] { "keepWorld", "smoke", "imagesOnly", "researchOnly",
                 "imageDiagnostics" }) {
                 check(
                     !defaults.get(flag)
@@ -106,7 +106,7 @@ public final class ExportSettingsRegression {
         check(latest.latest() && latest.modFilter.equals("Example Addon"), "Fixed output and trimmed mod selection");
         ExportOptions images = new ExportOptions(gson.fromJson("{\"noImages\":false}", JsonObject.class));
         check(!images.noImages, "Full image export remains opt-in");
-        for (String mode : new String[] { "imagesOnly", "layoutsOnly" }) {
+        for (String mode : new String[] { "imagesOnly" }) {
             JsonObject request = new JsonObject();
             request.addProperty("noImages", true);
             request.addProperty(mode, true);
@@ -125,10 +125,8 @@ public final class ExportSettingsRegression {
             research.researchOnly && research.noImages,
             "Research-only export supports mod filtering and skips images");
         for (String invalid : new String[] { "{\"outputMode\":\"../elsewhere\"}",
-            "{\"imagesOnly\":true,\"layoutsOnly\":true}", "{\"imagesOnly\":true,\"smoke\":true}",
-            "{\"researchOnly\":true,\"imagesOnly\":true}", "{\"researchOnly\":true,\"layoutsOnly\":true}",
-            "{\"researchOnly\":true,\"smoke\":true}", "{\"modFilter\":\"exampleaddon\",\"layoutsOnly\":true}",
-            "{\"modFilter\":\"exampleaddon\",\"smoke\":true}" }) {
+            "{\"imagesOnly\":true,\"smoke\":true}", "{\"researchOnly\":true,\"imagesOnly\":true}",
+            "{\"researchOnly\":true,\"smoke\":true}", "{\"modFilter\":\"exampleaddon\",\"smoke\":true}" }) {
             try {
                 new ExportOptions(gson.fromJson(invalid, JsonObject.class));
                 throw new AssertionError("Expected invalid autorun options: " + invalid);

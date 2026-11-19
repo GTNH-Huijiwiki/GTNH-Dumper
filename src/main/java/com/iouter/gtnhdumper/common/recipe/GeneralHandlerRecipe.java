@@ -37,7 +37,7 @@ public class GeneralHandlerRecipe extends BaseHandlerRecipe {
             return null;
         }
         try {
-            TemplateRecipeHandler loaded = (TemplateRecipeHandler) com.iouter.gtnhdumper.common.dumper.NEILayoutDumper
+            TemplateRecipeHandler loaded = (TemplateRecipeHandler) com.iouter.gtnhdumper.common.utils.NEIHandlerLoader
                 .loadHandler(recipeHandler);
             // 固定显示状态；依赖输入颜色的旗帜在下方单独展开成配对。
             loaded.cycleticks = 0;

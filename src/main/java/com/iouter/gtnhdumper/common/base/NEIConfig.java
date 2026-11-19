@@ -6,16 +6,9 @@ import com.iouter.gtnhdumper.common.dumper.AdvItemPanelDumper;
 import com.iouter.gtnhdumper.common.dumper.FluidsDumper;
 import com.iouter.gtnhdumper.common.dumper.GTMaterialDumper;
 import com.iouter.gtnhdumper.common.dumper.GTNHDimensionDumper;
-import com.iouter.gtnhdumper.common.dumper.GTOreVeinDumper;
-import com.iouter.gtnhdumper.common.dumper.GTSmallOreVeinDumper;
-import com.iouter.gtnhdumper.common.dumper.GTStructuresDumper;
-import com.iouter.gtnhdumper.common.dumper.GTUndergroundFluidDumper;
 import com.iouter.gtnhdumper.common.dumper.ItemIconDumper;
 import com.iouter.gtnhdumper.common.dumper.OreDictionaryDumper;
-import com.iouter.gtnhdumper.common.dumper.QuestDumper;
-import com.iouter.gtnhdumper.common.dumper.QuestLineDumper;
 import com.iouter.gtnhdumper.common.dumper.RecipesDumper;
-import com.iouter.gtnhdumper.common.dumper.TC4ResearchDumper;
 import com.iouter.gtnhdumper.common.dumper.TC4ThaumonomiconDumper;
 import com.iouter.gtnhdumper.common.dumper.TICMaterialDumper;
 
@@ -34,23 +27,10 @@ public class NEIConfig implements IConfigureNEI {
         API.addOption(new FluidsDumper());
         if (CommonProxy.isGTLoaded) {
             API.addOption(new GTMaterialDumper());
-            API.addOption(new GTOreVeinDumper());
-            API.addOption(new GTSmallOreVeinDumper());
-            API.addOption(new GTUndergroundFluidDumper());
             API.addOption(new GTNHDimensionDumper());
-            if (CommonProxy.isBR6343Loaded) {
-                API.addOption(new GTStructuresDumper());
-            }
         }
         if (CommonProxy.isTiCLoaded) API.addOption(new TICMaterialDumper());
-        if (CommonProxy.isTCLoaded) {
-            API.addOption(new TC4ResearchDumper());
-            API.addOption(new TC4ThaumonomiconDumper());
-        }
-        if (CommonProxy.isBQLoaded) {
-            API.addOption(new QuestDumper());
-            API.addOption(new QuestLineDumper());
-        }
+        if (CommonProxy.isTCLoaded) API.addOption(new TC4ThaumonomiconDumper());
     }
 
     @Override

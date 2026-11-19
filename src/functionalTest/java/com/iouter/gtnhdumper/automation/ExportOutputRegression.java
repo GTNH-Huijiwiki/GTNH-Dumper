@@ -103,30 +103,26 @@ public final class ExportOutputRegression {
     private static void checkTaskScopes(Path game) throws IOException {
         ExportOutput output = ExportOutput.create(game, "scope", true, filter(""));
         Path recipe = write(output.outputDirectory, "recipes/a.json", new byte[] { 1 });
-        Path layout = write(output.outputDirectory, "nei-layouts/layouts.json", new byte[] { 2 });
         Path materials = write(output.outputDirectory, "ticmaterial.json", new byte[] { 3 });
         Path image = write(output.outputDirectory, "icons/a.png", new byte[] { 4 });
         Path research = write(output.outputDirectory, "tc4research.json", new byte[] { 5 });
         output.clearData(options("researchOnly"));
         check(!Files.exists(research), "Research-only refresh clears the research table");
         check(
-            Files.exists(recipe) && Files.exists(layout) && Files.exists(materials) && Files.exists(image),
+            Files.exists(recipe) && Files.exists(materials) && Files.exists(image),
             "Research refresh preserves other data and images");
         output.clearData(options("imagesOnly"));
-        check(Files.exists(recipe) && Files.exists(layout) && Files.exists(materials), "Image-only refresh keeps data");
-        output.clearData(options("layoutsOnly"));
-        check(!Files.exists(layout), "Layout-only refresh clears layouts");
-        check(
-            Files.exists(recipe) && Files.exists(materials) && Files.exists(image),
-            "Layout refresh stays in its scope");
-        layout = write(output.outputDirectory, "nei-layouts/layouts.json", new byte[] { 2 });
+        check(Files.exists(recipe) && Files.exists(materials), "Image-only refresh keeps data");
         output.clearData(options("smoke"));
         check(!Files.exists(materials), "Smoke refresh clears its material JSON");
-        check(Files.exists(recipe) && Files.exists(layout) && Files.exists(image), "Smoke refresh stays in its scope");
+        check(Files.exists(recipe) && Files.exists(image), "Smoke refresh stays in its scope");
+        Path layout = write(output.outputDirectory, "nei-layouts/layouts.json", new byte[] { 2 });
+        Path veins = write(output.outputDirectory, "gtorevein.json", new byte[] { 6 });
         output.clearData(options());
         check(
-            Files.exists(layout) && Files.exists(image),
-            "Data refresh preserves separately exported layouts and icons");
+            !Files.exists(layout) && !Files.exists(veins) && !Files.exists(recipe),
+            "Data refresh removes outputs of removed exporters");
+        check(Files.exists(image), "Data refresh preserves icons");
     }
 
     private static void checkRedirectedPaths(Path root) throws IOException {

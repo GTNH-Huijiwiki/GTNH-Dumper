@@ -10,11 +10,14 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.StatCollector;
 
 import com.iouter.gtnhdumper.CommonProxy;
 import com.iouter.gtnhdumper.GTNHDumper;
@@ -42,7 +45,7 @@ import tuhljin.automagy.config.ModResearchItems;
  * All three are maps in registration order, keyed by category key, aspect tag and research key. Textures they refer
  * to (plus the book's interface textures) are copied to {@code tc4thaumonomicon-assets/}, see
  * {@link ThaumonomiconAssets}. Every field of {@code tc4research.json} is included with the same name and value, so
- * this file replaces it.
+ * this file replaced it (the old research export has been removed).
  *
  * <p>
  * With a mod filter only researches from that mod are written, together with the categories they sit in; aspects
@@ -185,7 +188,7 @@ public class TC4ThaumonomiconDumper extends WikiDumper {
     private static Map<String, Object> research(ResearchItem m, String source, ThaumonomiconAssets assets) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("Key", m.key);
-        // tc4research.json trims names and writes the localized category name; keep both.
+        // The former tc4research.json trimmed names and writes the localized category name; keep both.
         map.put(
             "Name",
             m.getName()
@@ -201,10 +204,10 @@ public class TC4ThaumonomiconDumper extends WikiDumper {
         map.put("Parents", m.parents);
         map.put("ParentsHidden", m.parentsHidden);
         map.put("Siblings", m.siblings);
-        // Same fields and values as tc4research.json: triggers as localized names.
-        map.put("ItemTriggers", TC4ResearchDumper.getItemStacksName(m.getItemTriggers()));
-        map.put("EntityTriggers", TC4ResearchDumper.getEnTitiesName(m.getEntityTriggers()));
-        map.put("AspectTriggers", TC4ResearchDumper.getAspectsName(m.getAspectTriggers()));
+        // Same fields and values as the former tc4research.json: triggers as localized names.
+        map.put("ItemTriggers", getItemStacksName(m.getItemTriggers()));
+        map.put("EntityTriggers", getEnTitiesName(m.getEntityTriggers()));
+        map.put("AspectTriggers", getAspectsName(m.getAspectTriggers()));
         // Lossless forms of the same triggers: items, entity ids and aspect tags.
         map.put("ItemTriggerItems", itemTriggers(m.getItemTriggers()));
         map.put("EntityTriggerIds", m.getEntityTriggers());
@@ -247,8 +250,46 @@ public class TC4ThaumonomiconDumper extends WikiDumper {
     /** Automagy unlocks some of its research by killing entities; the map is entity id to research key. */
     private static String[] killerTriggers(ResearchItem research) {
         if (!CommonProxy.isAutomagyLoaded || !"AUTOMAGY".equals(research.category)) return null;
-        Set<String> keys = TC4ResearchDumper.getKeysByValue(ModResearchItems.cluesOnKill, research.key);
+        Set<String> keys = getKeysByValue(ModResearchItems.cluesOnKill, research.key);
         return keys.toArray(new String[0]);
+    }
+
+    // Localized trigger names, as in the former tc4research.json.
+
+    private static List<String> getItemStacksName(ItemStack[] itemStacks) {
+        if (itemStacks == null) return null;
+        List<String> nameList = new ArrayList<>();
+        for (ItemStack i : itemStacks) {
+            nameList.add(i.getDisplayName());
+        }
+        return nameList;
+    }
+
+    private static List<String> getEnTitiesName(String[] list) {
+        if (list == null) return null;
+        List<String> nameList = new ArrayList<>();
+        for (String str : list) {
+            nameList.add(StatCollector.translateToLocal("entity." + str + ".name"));
+        }
+        return nameList;
+    }
+
+    private static List<String> getAspectsName(Aspect[] aspects) {
+        if (aspects == null) return null;
+        List<String> nameList = new ArrayList<>();
+        for (Aspect a : aspects) {
+
+            nameList.add(a.getName());
+        }
+        return nameList;
+    }
+
+    private static <T, E> Set<T> getKeysByValue(Map<T, E> map, E value) {
+        return map.entrySet()
+            .stream()
+            .filter(entry -> Objects.equals(entry.getValue(), value))
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toSet());
     }
 
     @Override
