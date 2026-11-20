@@ -125,8 +125,13 @@ public class Utils {
         return getRecipeItems(getItemStacks(positionedStack));
     }
 
-    public static Map<String, String[]> getOreDict() {
-        Map<String, String[]> map = new LinkedHashMap<>();
+    /**
+     * Ore dictionary entries read from Forge's {@code idToName}/{@code idToStack} lists, in registration order.
+     * An export that iterated {@code OreDictionary.getOreNames()}/{@code getOres()} instead came out empty in GTNH
+     * 2.9.0 (cause not established); this reflective read is the path previous exports used successfully.
+     */
+    public static Map<String, List<ItemStack>> getOreDictStacks() {
+        Map<String, List<ItemStack>> map = new LinkedHashMap<>();
         try {
             Class<?> oreDictClass = Class.forName("net.minecraftforge.oredict.OreDictionary");
 
@@ -145,14 +150,23 @@ public class Utils {
                 String name = idToName.get(i);
                 ArrayList<ItemStack> items = idToStack.get(i);
                 if (name == null || items == null || items.isEmpty()) continue;
-                map.put(
-                    name,
-                    items.stream()
-                        .map(Utils::getItemKey)
-                        .toArray(String[]::new));
+                map.put(name, items);
             }
         } catch (Exception e) {
             GTNHDumper.LOG.error(e);
+        }
+        return map;
+    }
+
+    public static Map<String, String[]> getOreDict() {
+        Map<String, String[]> map = new LinkedHashMap<>();
+        for (Map.Entry<String, List<ItemStack>> entry : getOreDictStacks().entrySet()) {
+            map.put(
+                entry.getKey(),
+                entry.getValue()
+                    .stream()
+                    .map(Utils::getItemKey)
+                    .toArray(String[]::new));
         }
         return map;
     }
