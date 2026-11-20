@@ -6,7 +6,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import net.glease.tc4tweak.modules.objectTag.GetObjectTags;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.EnumChatFormatting;
@@ -125,7 +124,9 @@ public class AdvItemPanelDumper extends WikiDumper {
             AspectList aspectList = null;
             if (CommonProxy.isTCLoaded) {
                 try {
-                    aspectList = GetObjectTags.getObjectTags(stack);
+                    // TC4Tweaks redirects Thaumcraft's lookup to GetObjectTags; the cache shares the recipe scan's
+                    // result.
+                    aspectList = com.iouter.gtnhdumper.common.utils.AspectTagsCache.objectTags(stack);
                 } catch (Exception e) {
                     GTNHDumper.LOG.error(e);
                 }
@@ -150,9 +151,12 @@ public class AdvItemPanelDumper extends WikiDumper {
         Map<ItemStack, String> originalNameMap = new HashMap<>(itemStacks.size());
         Utils.getEnglishTranslation(() -> {
             for (ItemStack stack : itemStacks) {
+                // Name lookups of some mods write default NBT into the stack (IC2 {}, Draconic Energy, GT++ Ion).
+                // Query a copy so the shared NEI stacks, and every key derived from them, stay unchanged.
                 originalNameMap.put(
                     stack,
-                    EnumChatFormatting.getTextWithoutFormattingCodes(GuiContainerManager.itemDisplayNameShort(stack)));
+                    EnumChatFormatting
+                        .getTextWithoutFormattingCodes(GuiContainerManager.itemDisplayNameShort(stack.copy())));
             }
         });
         return originalNameMap;
