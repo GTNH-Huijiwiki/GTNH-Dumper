@@ -3,9 +3,11 @@ package com.iouter.gtnhdumper.common.dumper;
 import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
@@ -568,9 +570,13 @@ public class GTMaterialDumper extends WikiDumper {
             }
         }
         // gtpp
-        for (Material m : Material.mMaterialMap) {
-            if (m != null) dumpGTPPMaterial(m, totalMap);
-        }
+        // GT++ 的材料表是 HashSet，按默认名称输出以固定顺序。
+        List<Material> gtppMaterials = new ArrayList<>();
+        for (Material m : Material.mMaterialMap) if (m != null) gtppMaterials.add(m);
+        gtppMaterials.sort(
+            java.util.Comparator.comparing(Material::getDefaultLocalName)
+                .thenComparing(Material::getUnlocalizedName));
+        for (Material m : gtppMaterials) dumpGTPPMaterial(m, totalMap);
         // gt5
         Materials[] gtMaterials = Materials.values();
         for (Materials m : gtMaterials) {

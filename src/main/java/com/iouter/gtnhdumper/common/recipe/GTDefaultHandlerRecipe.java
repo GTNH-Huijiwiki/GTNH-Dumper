@@ -22,6 +22,7 @@ import com.iouter.gtnhdumper.common.recipe.base.RecipeItem;
 import com.iouter.gtnhdumper.common.utils.DeferredRecipeSource;
 import com.iouter.gtnhdumper.common.utils.ModFilter;
 import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
+import com.iouter.gtnhdumper.common.utils.StableOrder;
 import com.iouter.gtnhdumper.common.utils.Transformer;
 import com.iouter.gtnhdumper.common.utils.Utils;
 
@@ -109,12 +110,23 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
                         inputFluids
                             .add(new RecipeFluid(Materials.Helium.getGas(0)).withAmount(recipe.getHeliumRequirement()));
                         ArrayList<Object> outputItems = new ArrayList<>();
-                        for (ItemStackLong itemStackLong : recipe.getOutputItems()) {
+                        // 产物按数量从大到小；同数量的顺序来自 HashMap，按物品次序 固定。
+                        List<ItemStackLong> sortedItems = new ArrayList<>(recipe.getOutputItems());
+                        sortedItems.sort(
+                            java.util.Comparator.comparingLong((ItemStackLong item) -> -item.stackSize)
+                                .thenComparing(item -> item.itemStack, StableOrder.ITEMS));
+                        for (ItemStackLong itemStackLong : sortedItems) {
                             outputItems
                                 .add(new RecipeItem(itemStackLong.itemStack).withAmount(itemStackLong.stackSize));
                         }
                         ArrayList<RecipeFluid> outputFluids = new ArrayList<>();
-                        for (FluidStackLong fluidStackLong : recipe.getOutputFluids()) {
+                        List<FluidStackLong> sortedFluids = new ArrayList<>(recipe.getOutputFluids());
+                        sortedFluids.sort(
+                            java.util.Comparator.comparingLong((FluidStackLong fluid) -> -fluid.amount)
+                                .thenComparing(
+                                    fluid -> fluid.fluidStack.getFluid()
+                                        .getName()));
+                        for (FluidStackLong fluidStackLong : sortedFluids) {
                             outputFluids
                                 .add(new RecipeFluid(fluidStackLong.fluidStack).withAmount(fluidStackLong.amount));
                         }
@@ -173,6 +185,20 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
             .filter(Objects::nonNull)
             .forEach(recipes::add);
         return recipes;
+    }
+
+    /** 后端存储的迭代顺序随启动变化；按 NEI 显示用的比较器排序，相等时按 JSON 文本。 */
+    @Override
+    protected java.util.Comparator<Object> recipeOrder(IRecipeHandler baseHandler) {
+        if (!(baseHandler instanceof GTNEIDefaultHandler handler)) return null;
+        java.util.Comparator<GTRecipe> comparator = handler.getRecipeMap()
+            .getFrontend()
+            .getNEIProperties().comparator;
+        return (a, b) -> {
+            GTRecipe left = a instanceof GTDumpedRecipe recipe ? recipe.source : null;
+            GTRecipe right = b instanceof GTDumpedRecipe recipe ? recipe.source : null;
+            return left == null || right == null ? 0 : comparator.compare(left, right);
+        };
     }
 
     private static Collection<GTRecipe> sourceRecipes(GTNEIDefaultHandler handler) {
@@ -313,6 +339,14 @@ public class GTDefaultHandlerRecipe extends BaseHandlerRecipe {
                     + error.getMessage();
                 RecipeItemVariants.reportFailure("GT recipe description", error);
             }
+            return this;
+        }
+
+        /** 排序用的原始配方，不序列化。 */
+        private transient GTRecipe source;
+
+        public GTDumpedRecipe withSource(GTRecipe source) {
+            this.source = source;
             return this;
         }
 

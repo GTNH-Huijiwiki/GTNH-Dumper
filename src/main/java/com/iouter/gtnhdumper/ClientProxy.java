@@ -30,6 +30,12 @@ public class ClientProxy extends CommonProxy {
         super.postInit(event);
     }
 
+    @Override
+    public void loadComplete(cpw.mods.fml.common.event.FMLLoadCompleteEvent event) {
+        super.loadComplete(event);
+        com.iouter.gtnhdumper.common.utils.LazySubtypes.warmUp();
+    }
+
     public void serverAboutToStart(FMLServerAboutToStartEvent event) {
         super.serverAboutToStart(event);
     }

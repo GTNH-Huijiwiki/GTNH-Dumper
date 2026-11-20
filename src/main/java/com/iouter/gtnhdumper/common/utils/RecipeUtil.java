@@ -22,6 +22,14 @@ public class RecipeUtil {
     }
 
     public static Object getRecipeItems(ItemStack[] stacks, int chance) {
+        return getRecipeItems(stacks, chance, false);
+    }
+
+    /**
+     * 同一槽位的候选物品。候选顺序常来自矿辞注册顺序或 HashSet，每次启动不同，这里按物品次序固定；
+     * keepFirst 时首项（配方自身登记的物品）保持在前。
+     */
+    public static Object getRecipeItems(ItemStack[] stacks, int chance, boolean keepFirst) {
         if (stacks == null || stacks.length == 0) {
             return null;
         }
@@ -29,6 +37,7 @@ public class RecipeUtil {
         stacks = Arrays.stream(stacks)
             .filter(Objects::nonNull)
             .toArray(ItemStack[]::new);
+        stacks = StableOrder.candidates(stacks, keepFirst);
         if (stacks.length == 0) return null;
         if (stacks.length == 1) {
             return new RecipeItem(stacks[0]).withChance(chance);

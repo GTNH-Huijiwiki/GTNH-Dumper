@@ -42,7 +42,8 @@ public class TICMaterialDumper extends WikiDumper {
     @Override
     public Iterable<Object[]> dumpObject(int mode) {
         LinkedList<Object[]> list = new LinkedList<>();
-        for (int index : toolMaterials.keySet()) {
+        // toolMaterials 是 HashMap：同一桶内的顺序取决于注册先后，按材料 ID 输出。
+        for (int index : new java.util.TreeSet<>(toolMaterials.keySet())) {
             ToolMaterial m = toolMaterials.get(index);
             ArrowMaterial arrowMaterial = TConstructRegistry.getArrowMaterial(index);
             BowMaterial bowMaterial = TConstructRegistry.getBowMaterial(index);

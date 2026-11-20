@@ -264,6 +264,19 @@ public class RecipesDumper extends FilteredDataDumper {
         }
     }
 
+    /**
+     * NEI 的处理器信息有时登记成小写的模组 ID（如 forestry），哪一条生效每次启动不同；目录名统一用 FML 的模组 ID。
+     */
+    static String canonicalModId(String modId) {
+        if (modId == null) return null;
+        for (cpw.mods.fml.common.ModContainer mod : cpw.mods.fml.common.Loader.instance()
+            .getModList()) {
+            if (mod.getModId()
+                .equalsIgnoreCase(modId)) return mod.getModId();
+        }
+        return modId;
+    }
+
     @Override
     public String[] header() {
         return new String[] { "Recipe json" };
@@ -287,7 +300,7 @@ public class RecipesDumper extends FilteredDataDumper {
             final String handlerId = Objects
                 .firstNonNull(handler instanceof TemplateRecipeHandler ? handler.getOverlayIdentifier() : null, "null");
             HandlerInfo info = GuiRecipeTab.getHandlerInfo(handlerName, handlerId);
-            String modID = info != null ? info.getModId() : "Unknown";
+            String modID = canonicalModId(info != null ? info.getModId() : "Unknown");
             String id = Utils.getAfterLastDot(handlerId);
             if (java.util.Objects.equals(id, "name") && handlerId != null) {
                 id = Utils.getAfterLastDot(handlerId.substring(0, handlerId.length() - ".name".length()));

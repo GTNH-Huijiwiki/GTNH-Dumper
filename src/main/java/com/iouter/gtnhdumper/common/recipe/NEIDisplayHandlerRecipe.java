@@ -65,10 +65,32 @@ public class NEIDisplayHandlerRecipe extends BaseHandlerRecipe {
         return fluid == null ? null : new RecipeFluid(fluid).withNBT(fluid);
     }
 
+    /**
+     * 燃料页借一条熔炼配方做演示，按轮播计数从全部熔炼配方中取；那份列表按熔炉配方 HashMap 的顺序建立，
+     * 每次启动不同。按原料的物品 ID 排序，演示配方固定。
+     */
+    private static void sortFuelExamples(TemplateRecipeHandler fuel) {
+        try {
+            @SuppressWarnings("unchecked")
+            List<Object> smelting = (List<Object>) field(fuel, "mfurnace");
+            java.util.Comparator<Object> order = java.util.Comparator.comparing(pair -> {
+                try {
+                    return ((PositionedStack) field(pair, "ingred")).items[0];
+                } catch (ReflectiveOperationException e) {
+                    throw new IllegalStateException(e);
+                }
+            }, com.iouter.gtnhdumper.common.utils.StableOrder.ITEMS);
+            smelting.sort(order);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            throw new IllegalStateException("Cannot fix NEI fuel example order", e);
+        }
+    }
+
     @Override
     public List<?> getRecipes(IRecipeHandler handler) {
         TemplateRecipeHandler template = (TemplateRecipeHandler) handler;
         TemplateRecipeHandler loaded = (TemplateRecipeHandler) template.getAllRecipeHandler();
+        if (loaded instanceof codechicken.nei.recipe.FuelRecipeHandler) sortFuelExamples(loaded);
         template.arecipes.clear();
         template.arecipes.addAll(loaded.arecipes);
         List<Map<String, Object>> result = new ArrayList<>();
