@@ -636,6 +636,11 @@ public final class ExportSession {
                     () -> com.iouter.gtnhdumper.common.utils.BetterQuestingFiles
                         .copy(Minecraft.getMinecraft().mcDataDir, output)));
         }
+        if (filter.isActive()) skipped.put("biomes", "Biomes belong to the whole pack");
+        else tasks.add(
+            new ExportTask(
+                "biomes",
+                () -> com.iouter.gtnhdumper.common.utils.BiomeExport.write(new File(output, "biomes.json"))));
         if (!options.tasks.isEmpty()) keepSelectedTasks();
     }
 

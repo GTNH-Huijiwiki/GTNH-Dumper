@@ -207,13 +207,31 @@ public class Transformer {
 
     public static ArrayList<Object> getOutputItems(GTRecipe gtRecipe) {
         ArrayList<Object> outputItems = new ArrayList<>();
-        ItemStack[] stacks = gtRecipe.getRecipeCategory().recipeMap.getFrontend()
-            .getNEIProperties().itemOutputsGetter.apply(gtRecipe);
+        gregtech.api.recipe.RecipeMapFrontend frontend = gtRecipe.getRecipeCategory().recipeMap.getFrontend();
+        ItemStack[] stacks = frontend.getNEIProperties().itemOutputsGetter.apply(gtRecipe);
         for (int i = 0; i < stacks.length; i++) {
-            if (stacks[i] != null) outputItems.add(new RecipeItem(stacks[i]).withChance(gtRecipe.getOutputChance(i)));
+            if (stacks[i] == null) continue;
+            RecipeItem output = new RecipeItem(stacks[i]).withChance(gtRecipe.getOutputChance(i));
+            outputItems.add(output);
+            if (frontend instanceof gregtech.api.recipe.maps.NACMatrixFrontend)
+                addXorOutput(outputItems, output, stacks[i]);
         }
         if (outputItems.isEmpty()) return null;
         return outputItems;
+    }
+
+    /**
+     * 纳米芯片组装矩阵：带 xorResult 的电路组件每次产出有一定概率换成 xorResult（如光学处理器 → 未组织的光学处理器）。
+     * 配方本身只登记前者，NEI 由 NACMatrixFrontend.prepareRecipe 补上第二个产物并标概率；这里按同一规则导出。
+     */
+    private static void addXorOutput(ArrayList<Object> outputItems, RecipeItem output, ItemStack stack) {
+        gregtech.common.tileentities.machines.multi.nanochip.util.CircuitComponent component = gregtech.common.tileentities.machines.multi.nanochip.util.CircuitComponent
+            .tryGetFromFakeStack(stack);
+        if (component == null || component.xorResult == null) return;
+        output.withChance(component.xorSuccessChance);
+        ItemStack xor = component.xorResult.getFakeStack(stack.stackSize);
+        RecipeItemVariants.captureExactOutput(xor);
+        outputItems.add(new RecipeItem(xor).withChance(10000 - component.xorSuccessChance));
     }
 
     public static ArrayList<RecipeFluid> getInputFluids(GTRecipe gtRecipe) {
