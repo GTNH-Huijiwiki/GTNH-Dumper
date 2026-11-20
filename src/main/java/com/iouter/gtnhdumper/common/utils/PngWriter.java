@@ -128,7 +128,15 @@ public final class PngWriter implements AutoCloseable {
     }
 
     private void checkFailure() {
-        if (failure.get() != null) throw new IllegalStateException("PNG output failed", failure.get());
+        if (failure.get() != null) throw new OutputFailure(failure.get());
+    }
+
+    /** Writing PNG files failed; unlike a single item's render error, this must stop the export. */
+    public static final class OutputFailure extends IllegalStateException {
+
+        OutputFailure(Throwable cause) {
+            super("PNG output failed", cause);
+        }
     }
 
     @Override

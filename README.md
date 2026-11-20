@@ -151,6 +151,33 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 需要补充新物品或更新纹理时设置 `noImages: false`。
 图标导出仍使用最大 PNG 压缩。`imagesOnly` 明确请求捕获素材，优先于 `noImages`。
 
+#### 图标缓存、像素哈希与渲染稳定性
+
+- **并行编码**：渲染仍在客户端线程，PNG 编码交给后台线程，默认 CPU 核数减 2（最多 16）。
+  待编码像素按字节限额排队，默认 512 MB。
+- **内容缓存**：每张图按像素计算 SHA-1，编码结果存进 `.minecraft/dumper-cache/png/<前两位>/<哈希>.png`，
+  输出目录里的文件是指向缓存的硬链接（不支持时复制）。同一实例再次导出时，像素没变的图片不再编码，
+  `icon-performance.json` 的 `pngCacheHits` 记录命中数。缓存可以随时删除，下次导出重新生成。
+  不要原地修改输出目录里的 PNG，否则会改坏缓存；需要修改时先复制。
+- **像素哈希清单**：`icon-hashes.json` 的 `images` 把每个 PNG 文件名映射到像素哈希
+  （`sha1("宽:高:" + 按行的 ARGB 大端字节)`）。哈希只看像素，与 PNG 编码无关；工具链用它比较两次导出。
+- **动画帧条上限**：帧条长度是所有动画帧数的最小公倍数，可能远超内存。原始帧条超过 256 MB 的动画
+  只导出静态图，记在 `icon-performance.json` 的 `oversizedAnimations`。海晶石系列（帧条可达 1.65 GB）固定导出静态图。
+- **固定渲染时钟**：渲染图标期间，`Minecraft.getSystemTime()`（附魔光效、随时间变色）、世界时间与渲染插值
+  （刷怪笼生物、旋转模型）、玩家 tick 都固定为同一值，结束后恢复，`frozenRenderClock` 记录所用的值。
+  直接读系统时间或随机数的渲染器仍会每次不同，由工具链比较两次导出的 `icon-hashes.json` 记为不稳定图标。
+
+这些设置可以用 JVM 参数调整：
+
+| JVM 参数 | 默认值 | 作用 |
+| --- | --- | --- |
+| `-Dgtnhdumper.pngWorkers=N` | CPU 核数 − 2，最多 16 | PNG 编码线程数；`0` 表示在渲染线程上同步编码 |
+| `-Dgtnhdumper.pngQueueMB=N` | `512` | 待编码像素的内存上限 |
+| `-Dgtnhdumper.pngCache=false` | `true` | 关闭内容缓存，直接写 PNG |
+| `-Dgtnhdumper.maxAnimationMB=N` | `256` | 单个动画帧条的原始大小上限 |
+
+整合包实例建议最大内存设为 8 GB 或以上。
+
 ### 只更新一个附属
 
 ```json

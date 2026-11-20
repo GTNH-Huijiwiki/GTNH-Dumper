@@ -71,6 +71,7 @@ public class ItemIconDumper extends WikiDumper {
     private static JsonObject resume;
     private static int resumedIcons;
     private static final Map<String, Integer> unregisteredItems = new LinkedHashMap<>();
+    private static final Map<String, String> renderFailures = new LinkedHashMap<>();
 
     private static ItemIconDumper pending;
     private List<ItemStack> selectedStacks;
@@ -257,6 +258,7 @@ public class ItemIconDumper extends WikiDumper {
         }
         resumedIcons = 0;
         unregisteredItems.clear();
+        renderFailures.clear();
         resume = null;
         File resumeFile = ExportSession.imageResume();
         if (resumeFile != null) {
@@ -284,6 +286,7 @@ public class ItemIconDumper extends WikiDumper {
             metrics.put("frozenRenderClock", IconRenderClock.report());
             metrics.put("resumedIcons", resumedIcons);
             metrics.put("excludedUnregisteredItems", unregisteredItems);
+            metrics.put("renderFailures", renderFailures.size());
             synchronized (OVERSIZED_ANIMATIONS) {
                 metrics.put("oversizedAnimations", new LinkedHashMap<>(OVERSIZED_ANIMATIONS));
             }
@@ -299,6 +302,10 @@ public class ItemIconDumper extends WikiDumper {
                 hashes.put("schemaVersion", 1);
                 hashes.put("algorithm", "sha1(width:height:ARGB big-endian rows)");
                 hashes.put("images", writer.pixelHashes());
+                Files.write(
+                    outputFile("icon-failures.json").toPath(),
+                    GTNHDumper.GSON.toJson(renderFailures)
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 Files.write(
                     outputFile("icon-hashes.json").toPath(),
                     GTNHDumper.GSON.toJson(hashes)
@@ -366,12 +373,23 @@ public class ItemIconDumper extends WikiDumper {
                             concatenateImages(frames, false));
                         frameCountMap.put(renderStack, sampling.frameCount);
                         dynamicSizeMap.put(renderStack, sampling.frameSize);
-                    } else renderGeneralItem(
-                        renderStack,
-                        getFbo(SINGLE_FRAME_SIZE),
-                        RenderItem.getInstance(),
-                        iconName,
-                        getIconFileName(stack, true));
+                    } else {
+                        try {
+                            renderGeneralItem(
+                                renderStack,
+                                getFbo(SINGLE_FRAME_SIZE),
+                                RenderItem.getInstance(),
+                                iconName,
+                                getIconFileName(stack, true));
+                        } catch (RuntimeException | LinkageError error) {
+                            if (error instanceof PngWriter.OutputFailure) throw error;
+                            // A single item whose own icon code rejects its NBT must not abort the export.
+                            // It gets no icon mapping; the failure is listed in icon-failures.json.
+                            renderFailures.put(Utils.getItemStackShortKey(stack), error.toString());
+                            rendered.remove(iconName);
+                            continue;
+                        }
+                    }
                     if (frameCountMap.containsKey(renderStack))
                         frameCountMap.put(stack, frameCountMap.getInt(renderStack));
                     if (dynamicSizeMap.containsKey(renderStack))
