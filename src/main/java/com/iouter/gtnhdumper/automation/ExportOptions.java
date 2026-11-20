@@ -33,7 +33,8 @@ final class ExportOptions {
             "gtnhdimension",
             "ticmaterial",
             "tc4thaumonomicon",
-            "betterquesting"));
+            "betterquesting",
+            "biomes"));
 
     ExportOptions(JsonObject request) {
         outputMode = request.has("outputMode") ? request.get("outputMode")

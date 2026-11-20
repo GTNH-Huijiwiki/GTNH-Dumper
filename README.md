@@ -326,6 +326,19 @@ GT 两种超立方体由客户端 RenderTick 同时按 50 ms 目标间隔采样 
 定时采样与关闭面剔除分别配置；超立方体在绘制期间关闭剔除，以保留 Angelica 将宽线展开成的三角形，随后恢复原状态。
 普通物品保留现有静态图和纹理动画导出流程。当前所有定时采样物品共用一组采样参数。
 
+## 生物群系与生态之书
+
+全量自动导出（及 `tasks` 中的 `biomes`）写出 `biomes.json`：
+
+- `biomes`：每个已注册群系一条，含 ID、英文名、类名、温度、降水、`highHumidity`、`enableSnow`、`enableRain`、`lightning`、
+  `rootHeight`、`heightVariation`、颜色、地表与填充方块、BiomeDictionary 标签、林业气候（`forestryTemperature`/`forestryHumidity`）、
+  IC2 作物加成（`ic2CropBonus`，有 IC2 作物 API 时）、按生物类别的刷怪表（实体名、权重、群组大小），以及在生态之书扩展版中的页码 `bookPages`。
+- 装了巫术时另有两本书，取自游戏里构造的书本界面（不显示），与翻开看到的一致，当前语言与英文各一份：
+  - `bookOfBiomes`（`witchery:ingredient:106`，生态之书）：季节变迁仪式指南，每类群系一页，含核心物品和群系列表。
+  - `bookOfBiomesExtended`（`witchery:bookbiomes2`，扩展版）：分节（BiomeDictionary 类型）与每页的群系、降雨、温度、降雪、打雷四行。
+
+按 Mod 导出时跳过（群系属于整个整合包）。
+
 ## 任务书源文件
 
 全量自动导出时，如果加载了 BetterQuesting，会把任务书源文件复制到 `dumps/betterquesting/`，
