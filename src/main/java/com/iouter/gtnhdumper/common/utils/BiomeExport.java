@@ -40,8 +40,10 @@ public final class BiomeExport {
         Map<String, Object> root = new LinkedHashMap<>();
         Map<String, Object> books = Loader.isModLoaded("witchery") ? WitcheryBiomeBooks.export(bookPages) : null;
         List<Map<String, Object>> biomes = new ArrayList<>();
+        java.util.Set<Integer> seen = new java.util.HashSet<>();
         for (BiomeGenBase biome : BiomeGenBase.getBiomeGenArray()) {
-            if (biome != null) biomes.add(describe(biome, bookPages.get(biome.biomeID)));
+            // Some mods register one biome object in several slots; export each biome id once.
+            if (biome != null && seen.add(biome.biomeID)) biomes.add(describe(biome, bookPages.get(biome.biomeID)));
         }
         root.put("biomes", biomes);
         if (books != null) root.putAll(books);
