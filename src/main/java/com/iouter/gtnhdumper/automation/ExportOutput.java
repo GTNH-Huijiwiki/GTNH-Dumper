@@ -76,7 +76,17 @@ final class ExportOutput {
         if (!latest || options.imagesOnly) return;
         checkDirectories(outputDirectory);
         List<Path> deletionOrder = new ArrayList<>();
-        if (options.researchOnly) {
+        if (!options.tasks.isEmpty()) {
+            // Partial export: only the selected tasks' previous output is replaced; images are never cleared here.
+            for (String task : options.tasks) {
+                if (task.equals("recipes")) collectForDeletion(outputDirectory.resolve("recipes"), true, deletionOrder);
+                else if (task.equals("tc4thaumonomicon")) {
+                    collectForDeletion(outputDirectory.resolve("tc4thaumonomicon.json"), false, deletionOrder);
+                    collectForDeletion(outputDirectory.resolve("tc4thaumonomicon-assets"), true, deletionOrder);
+                } else if (!task.equals("itemicon") && !task.equals("betterquesting"))
+                    collectForDeletion(outputDirectory.resolve(task + ".json"), false, deletionOrder);
+            }
+        } else if (options.researchOnly) {
             collectForDeletion(outputDirectory.resolve("tc4research.json"), false, deletionOrder);
             collectForDeletion(outputDirectory.resolve("tc4thaumonomicon.json"), false, deletionOrder);
             collectForDeletion(outputDirectory.resolve("tc4thaumonomicon-assets"), true, deletionOrder);

@@ -636,6 +636,18 @@ public final class ExportSession {
                     () -> com.iouter.gtnhdumper.common.utils.BetterQuestingFiles
                         .copy(Minecraft.getMinecraft().mcDataDir, output)));
         }
+        if (!options.tasks.isEmpty()) keepSelectedTasks();
+    }
+
+    /** Partial export: keep the requested tasks; the item scan only when items are enumerated. */
+    private void keepSelectedTasks() {
+        boolean itemsNeeded = options.tasks.contains("itemicon") || options.tasks.contains("advitempanel");
+        tasks.removeIf(task -> task.name.equals("item-variants") ? !itemsNeeded : !options.tasks.contains(task.name));
+        skipped.keySet()
+            .retainAll(options.tasks);
+        for (String name : options.tasks) if (tasks.stream()
+            .noneMatch(task -> task.name.equals(name)) && !skipped.containsKey(name))
+            skipped.put(name, "Requested task is not available in this pack");
     }
 
     private void status(String newStage, String message) throws IOException {
@@ -650,6 +662,7 @@ public final class ExportSession {
         result.addProperty("researchOnly", options.researchOnly);
         result.addProperty("outputMode", options.outputMode);
         result.addProperty("noImages", options.noImages);
+        result.add("tasks", GTNHDumper.GSON.toJsonTree(options.tasks));
         result.addProperty("modFilter", filter.modId());
         result.addProperty("outputDirectory", output.getAbsolutePath());
         // Requested reuse is not a count or proof of complete image coverage.

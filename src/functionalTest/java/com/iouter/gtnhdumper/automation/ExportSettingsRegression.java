@@ -124,9 +124,18 @@ public final class ExportSettingsRegression {
         check(
             research.researchOnly && research.noImages,
             "Research-only export supports mod filtering and skips images");
-        for (String invalid : new String[] { "{\"outputMode\":\"../elsewhere\"}",
-            "{\"imagesOnly\":true,\"smoke\":true}", "{\"researchOnly\":true,\"imagesOnly\":true}",
-            "{\"researchOnly\":true,\"smoke\":true}", "{\"modFilter\":\"exampleaddon\",\"smoke\":true}" }) {
+        ExportOptions partial = new ExportOptions(
+            gson.fromJson("{\"tasks\":[\"gtnhdimension\",\"tc4thaumonomicon\"],\"noImages\":false}", JsonObject.class));
+        check(
+            partial.tasks.size() == 2 && partial.noImages,
+            "Partial exports run only the listed tasks; images only when itemicon is listed");
+        check(
+            !new ExportOptions(gson.fromJson("{\"tasks\":[\"itemicon\"]}", JsonObject.class)).noImages,
+            "Listing itemicon captures images despite the noImages default");
+        for (String invalid : new String[] { "{\"outputMode\":\"../elsewhere\"}", "{\"tasks\":[\"quest\"]}",
+            "{\"tasks\":[\"recipes\"],\"researchOnly\":true}", "{\"imagesOnly\":true,\"smoke\":true}",
+            "{\"researchOnly\":true,\"imagesOnly\":true}", "{\"researchOnly\":true,\"smoke\":true}",
+            "{\"modFilter\":\"exampleaddon\",\"smoke\":true}" }) {
             try {
                 new ExportOptions(gson.fromJson(invalid, JsonObject.class));
                 throw new AssertionError("Expected invalid autorun options: " + invalid);
