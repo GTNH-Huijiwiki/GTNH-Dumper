@@ -1,6 +1,5 @@
 package com.iouter.gtnhdumper;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,7 +21,7 @@ public final class EarlyMixinPlugin implements IFMLLoadingPlugin, IEarlyMixinLoa
 
     @Override
     public List<String> getMixins(Set<String> loadedCoreMods) {
-        return Collections.singletonList("MinecraftSystemTimeMixin");
+        return java.util.Arrays.asList("MinecraftSystemTimeMixin", "EntitySeedMixin");
     }
 
     @Override

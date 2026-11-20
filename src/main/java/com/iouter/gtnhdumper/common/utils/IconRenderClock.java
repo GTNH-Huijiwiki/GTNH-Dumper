@@ -40,6 +40,20 @@ public final class IconRenderClock {
     private static boolean worldSaved;
     private static String failure;
     private static int resetSprites;
+    /** Saved values of mod animation counters: field, owner (null when static), original value. */
+    private static final java.util.List<Object[]> savedCounters = new java.util.ArrayList<>();
+    private static final Map<String, String> counterFailures = new LinkedHashMap<>();
+    private static int frozenCounters;
+
+    /**
+     * Mod animation counters read by item renderers: class, field, fixed value. The owner is the static field's class,
+     * or for GT the client proxy instance. Missing mods are skipped.
+     */
+    private static final Object[][] COUNTERS = { { "gregtech.common.GTClient", "mAnimationTick", 6000L },
+        { "gregtech.common.GTClient", "renderTickTime", 0f },
+        { "vazkii.botania.client.core.handler.ClientTickHandler", "ticksInGame", 6000 },
+        { "vazkii.botania.client.core.handler.ClientTickHandler", "partialTicks", 0f },
+        { "thaumic.tinkerer.client.core.handler.ClientTickHandler", "elapsedTicks", 6000 }, };
     private static final java.lang.reflect.Field FRAME_COUNTER = ReflectionHelper
         .findField(TextureAtlasSprite.class, "frameCounter", "field_110973_g");
     private static final java.lang.reflect.Field TICK_COUNTER = ReflectionHelper
@@ -75,6 +89,8 @@ public final class IconRenderClock {
             }
             resetSprites = resetAnimations(minecraft, TextureMap.locationBlocksTexture)
                 + resetAnimations(minecraft, TextureMap.locationItemsTexture);
+            if (minecraft.theWorld != null) minecraft.theWorld.rand.setSeed(WORLD_TIME);
+            freezeCounters();
         } catch (RuntimeException | ReflectiveOperationException error) {
             failure = error.toString();
         }
@@ -95,6 +111,50 @@ public final class IconRenderClock {
             timer(minecraft).renderPartialTicks = savedPartialTicks;
         } catch (RuntimeException ignored) {}
         if (minecraft.thePlayer != null) minecraft.thePlayer.ticksExisted = savedPlayerTicks;
+        for (Object[] saved : savedCounters) {
+            try {
+                ((java.lang.reflect.Field) saved[0]).set(saved[1], saved[2]);
+            } catch (ReflectiveOperationException ignored) {}
+        }
+        savedCounters.clear();
+    }
+
+    private static void freezeCounters() {
+        savedCounters.clear();
+        counterFailures.clear();
+        for (Object[] counter : COUNTERS) {
+            String name = counter[0] + "." + counter[1];
+            try {
+                Class<?> owner = Class.forName((String) counter[0]);
+                java.lang.reflect.Field field = owner.getDeclaredField((String) counter[1]);
+                field.setAccessible(true);
+                Object target = null;
+                if (!java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                    // GT keeps its counter on the client proxy.
+                    target = Class.forName("gregtech.GTMod")
+                        .getMethod("clientProxy")
+                        .invoke(null);
+                    if (target == null) continue;
+                }
+                savedCounters.add(new Object[] { field, target, field.get(target) });
+                field.set(target, counter[2]);
+            } catch (ClassNotFoundException missingMod) {
+                // Mod not installed.
+            } catch (ReflectiveOperationException | RuntimeException error) {
+                counterFailures.put(name, error.toString());
+            }
+        }
+        frozenCounters = savedCounters.size();
+    }
+
+    /** {@code System.currentTimeMillis()} for redirected item renderers. */
+    public static long currentTimeMillis() {
+        return frozen ? SYSTEM_TIME : System.currentTimeMillis();
+    }
+
+    /** {@code System.nanoTime()} for redirected item renderers. */
+    public static long nanoTime() {
+        return frozen ? SYSTEM_TIME * 1_000_000L : System.nanoTime();
     }
 
     /** Uploads the first animation frame of every animated sprite and restarts its counters. */
@@ -133,6 +193,8 @@ public final class IconRenderClock {
     public static synchronized Map<String, Object> report() {
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("resetAnimatedSprites", resetSprites);
+        report.put("frozenCounters", frozenCounters);
+        report.put("counterFailures", new LinkedHashMap<>(counterFailures));
         report.put("systemTime", SYSTEM_TIME);
         report.put("worldTime", WORLD_TIME);
         report.put("partialTicks", 0);
