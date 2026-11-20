@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
@@ -156,34 +155,40 @@ public final class PngWriter implements AutoCloseable {
             return;
         }
         Path cached = new File(cacheDirectory, hash.substring(0, 2) + File.separator + hash + ".png").toPath();
-        if (Files.isRegularFile(cached)) cacheHits.increment();
-        else {
-            Files.createDirectories(cached.getParent());
-            // Encode beside the cache entry and move it in atomically; concurrent duplicates overwrite equal bytes.
-            File temporary = new File(
-                cached.getParent()
-                    .toFile(),
-                hash + "."
-                    + Thread.currentThread()
-                        .getId()
-                    + ".tmp");
-            encode(temporary, image);
-            try {
-                Files.move(temporary.toPath(), cached, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException raced) {
-                // Another writer stored the same pixels first; its file is equivalent.
-                if (!Files.isRegularFile(cached)) throw raced;
-                Files.deleteIfExists(temporary.toPath());
+        // Writers of the same pixels, or of the same output name, take the same lock; cache entries are never replaced
+        // because Windows briefly removes the target of a replacing move.
+        synchronized (lock(hash)) {
+            if (Files.isRegularFile(cached)) cacheHits.increment();
+            else {
+                Files.createDirectories(cached.getParent());
+                File temporary = new File(
+                    cached.getParent()
+                        .toFile(),
+                    hash + ".tmp");
+                encode(temporary, image);
+                Files.move(temporary.toPath(), cached);
             }
         }
         Path target = file.toPath();
-        Files.createDirectories(target.getParent());
-        Files.deleteIfExists(target);
-        try {
-            Files.createLink(target, cached);
-        } catch (IOException | UnsupportedOperationException unsupportedLink) {
-            Files.copy(cached, target);
+        synchronized (lock(target.toString())) {
+            Files.createDirectories(target.getParent());
+            Files.deleteIfExists(target);
+            try {
+                Files.createLink(target, cached);
+            } catch (IOException | UnsupportedOperationException unsupportedLink) {
+                Files.copy(cached, target);
+            }
         }
+    }
+
+    private final Object[] locks = new Object[1024];
+
+    {
+        for (int i = 0; i < locks.length; i++) locks[i] = new Object();
+    }
+
+    private Object lock(String key) {
+        return locks[(key.hashCode() & Integer.MAX_VALUE) % locks.length];
     }
 
     /** SHA-1 of "width:height:" followed by the ARGB pixels in row order, big endian. */
