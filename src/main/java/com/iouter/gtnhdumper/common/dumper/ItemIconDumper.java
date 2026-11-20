@@ -40,6 +40,7 @@ import com.iouter.gtnhdumper.common.base.WikiDumper;
 import com.iouter.gtnhdumper.common.utils.AllItemStacks;
 import com.iouter.gtnhdumper.common.utils.DynamicTexture;
 import com.iouter.gtnhdumper.common.utils.FBOHelper;
+import com.iouter.gtnhdumper.common.utils.IconRenderClock;
 import com.iouter.gtnhdumper.common.utils.ModFilter;
 import com.iouter.gtnhdumper.common.utils.PngWriter;
 import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
@@ -65,9 +66,12 @@ public class ItemIconDumper extends WikiDumper {
     private static final Object2IntOpenHashMap<ItemStack> frameCountMap = new Object2IntOpenHashMap<>();
     private static final Object2IntOpenHashMap<ItemStack> dynamicSizeMap = new Object2IntOpenHashMap<>();
     private static final Map<Integer, FBOHelper> fbos = new HashMap<>();
+    /** Animations whose frame strip exceeds gtnhdumper.maxAnimationMB; exported as still images only. */
+    private static final Map<String, String> OVERSIZED_ANIMATIONS = new LinkedHashMap<>();
     private static JsonObject resume;
     private static int resumedIcons;
     private static final Map<String, Integer> unregisteredItems = new LinkedHashMap<>();
+    private static final Map<String, String> renderFailures = new LinkedHashMap<>();
 
     private static ItemIconDumper pending;
     private List<ItemStack> selectedStacks;
@@ -243,10 +247,18 @@ public class ItemIconDumper extends WikiDumper {
     @Override
     public Iterable<Object[]> dumpObject(int mode) {
         long started = System.nanoTime();
-        int workers = Integer.getInteger("gtnhdumper.pngWorkers", 0);
-        PngWriter writer = new PngWriter(workers);
+        int workers = Integer.getInteger("gtnhdumper.pngWorkers", PngWriter.defaultWorkers());
+        // Content-addressed PNG cache shared by all runs of this instance; unchanged pixels are linked, not encoded.
+        File cache = Boolean.parseBoolean(System.getProperty("gtnhdumper.pngCache", "true"))
+            ? new File(Minecraft.getMinecraft().mcDataDir, "dumper-cache/png")
+            : null;
+        PngWriter writer = new PngWriter(workers, cache);
+        synchronized (OVERSIZED_ANIMATIONS) {
+            OVERSIZED_ANIMATIONS.clear();
+        }
         resumedIcons = 0;
         unregisteredItems.clear();
+        renderFailures.clear();
         resume = null;
         File resumeFile = ExportSession.imageResume();
         if (resumeFile != null) {
@@ -259,22 +271,44 @@ public class ItemIconDumper extends WikiDumper {
             }
         }
         FBOHelper.setPngWriter(writer);
+        IconRenderClock.freeze();
         try (writer) {
             return dumpIcons(mode);
         } finally {
+            IconRenderClock.release();
             FBOHelper.setPngWriter(null);
             Map<String, Object> metrics = new LinkedHashMap<>();
             metrics.put("workers", workers);
             metrics.put("maximumCompression", true);
             metrics.put("writtenImages", writer.count());
+            metrics.put("pngCache", cache == null ? null : cache.getAbsolutePath());
+            metrics.put("pngCacheHits", writer.cacheHits());
+            metrics.put("frozenRenderClock", IconRenderClock.report());
             metrics.put("resumedIcons", resumedIcons);
             metrics.put("excludedUnregisteredItems", unregisteredItems);
+            metrics.put("renderFailures", renderFailures.size());
+            synchronized (OVERSIZED_ANIMATIONS) {
+                metrics.put("oversizedAnimations", new LinkedHashMap<>(OVERSIZED_ANIMATIONS));
+            }
             metrics.put("wallNanos", System.nanoTime() - started);
             metrics.put("encodingAndWriteTaskNanos", writer.encodeNanos());
             try {
                 Files.write(
                     outputFile("icon-capture-report.json").toPath(),
                     GTNHDumper.GSON.toJson(captureReport)
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                // Pixel hash per written file: identical hashes mean identical pixels, independent of PNG encoding.
+                Map<String, Object> hashes = new LinkedHashMap<>();
+                hashes.put("schemaVersion", 1);
+                hashes.put("algorithm", "sha1(width:height:ARGB big-endian rows)");
+                hashes.put("images", writer.pixelHashes());
+                Files.write(
+                    outputFile("icon-failures.json").toPath(),
+                    GTNHDumper.GSON.toJson(renderFailures)
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                Files.write(
+                    outputFile("icon-hashes.json").toPath(),
+                    GTNHDumper.GSON.toJson(hashes)
                         .getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 Files.write(
                     outputFile("icon-performance.json").toPath(),
@@ -339,12 +373,23 @@ public class ItemIconDumper extends WikiDumper {
                             concatenateImages(frames, false));
                         frameCountMap.put(renderStack, sampling.frameCount);
                         dynamicSizeMap.put(renderStack, sampling.frameSize);
-                    } else renderGeneralItem(
-                        renderStack,
-                        getFbo(SINGLE_FRAME_SIZE),
-                        RenderItem.getInstance(),
-                        iconName,
-                        getIconFileName(stack, true));
+                    } else {
+                        try {
+                            renderGeneralItem(
+                                renderStack,
+                                getFbo(SINGLE_FRAME_SIZE),
+                                RenderItem.getInstance(),
+                                iconName,
+                                getIconFileName(stack, true));
+                        } catch (RuntimeException | LinkageError error) {
+                            if (error instanceof PngWriter.OutputFailure) throw error;
+                            // A single item whose own icon code rejects its NBT must not abort the export.
+                            // It gets no icon mapping; the failure is listed in icon-failures.json.
+                            renderFailures.put(Utils.getItemStackShortKey(stack), error.toString());
+                            rendered.remove(iconName);
+                            continue;
+                        }
+                    }
                     if (frameCountMap.containsKey(renderStack))
                         frameCountMap.put(stack, frameCountMap.getInt(renderStack));
                     if (dynamicSizeMap.containsKey(renderStack))
@@ -645,7 +690,8 @@ public class ItemIconDumper extends WikiDumper {
     private static void renderGeneralItem(ItemStack itemStack, FBOHelper fbo, RenderItem itemRenderer,
         String staticName, String dynamicName) {
         DynamicTexture dynamicTexture = new DynamicTexture(itemStack);
-        boolean dynamic = !staticName.contains("Botania:prismarine") && dynamicTexture.isDynamic();
+        // Prismarine animations have thousands of frames (6600 for the wall); export them as still images.
+        boolean dynamic = !staticName.startsWith("icon_Botania_prismarine") && dynamicTexture.isDynamic();
         if (resumeItem(itemStack, dynamic, staticName, dynamicName)) return;
         if (dynamic) {
             renderDynamicItem(itemStack, itemRenderer, dynamicTexture, staticName, dynamicName);
@@ -719,7 +765,25 @@ public class ItemIconDumper extends WikiDumper {
         String staticName, String dynamicName) {
         int frameCount = dynamicTexture.lcm;
         boolean is3dBlockItem = is3dBlockItem(itemStack);
-        FBOHelper dynamicFbo = getFbo(is3dBlockItem ? SINGLE_FRAME_SIZE : getDynamicTextureSize(dynamicTexture));
+        int frameSize = is3dBlockItem ? SINGLE_FRAME_SIZE : getDynamicTextureSize(dynamicTexture);
+        long stripBytes = (long) frameCount * frameSize * frameSize * 4L;
+        // The strip spans the least common multiple of all animation lengths and can exceed the heap.
+        // Frames and the strip are both held, so peak use is about twice this limit.
+        if (stripBytes > Long.getLong("gtnhdumper.maxAnimationMB", 256L) << 20) {
+            GTNHDumper.LOG.warn(
+                "Animated icon {} needs {} frames of {}px ({} MB); exporting a still image",
+                staticName,
+                frameCount,
+                frameSize,
+                stripBytes >> 20);
+            synchronized (OVERSIZED_ANIMATIONS) {
+                OVERSIZED_ANIMATIONS.put(staticName, frameCount + "x" + frameSize + "px=" + (stripBytes >> 20) + "MB");
+            }
+            BufferedImage still = renderItem(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer, 1f, null);
+            FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
+            return;
+        }
+        FBOHelper dynamicFbo = getFbo(frameSize);
         BufferedImage[] images = new BufferedImage[frameCount];
         try {
             for (int i = 0; i < frameCount; i++) {

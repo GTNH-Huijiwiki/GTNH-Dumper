@@ -44,16 +44,9 @@ import com.iouter.gtnhdumper.common.dumper.AdvItemPanelDumper;
 import com.iouter.gtnhdumper.common.dumper.FluidsDumper;
 import com.iouter.gtnhdumper.common.dumper.GTMaterialDumper;
 import com.iouter.gtnhdumper.common.dumper.GTNHDimensionDumper;
-import com.iouter.gtnhdumper.common.dumper.GTOreVeinDumper;
-import com.iouter.gtnhdumper.common.dumper.GTSmallOreVeinDumper;
-import com.iouter.gtnhdumper.common.dumper.GTStructuresDumper;
-import com.iouter.gtnhdumper.common.dumper.GTUndergroundFluidDumper;
 import com.iouter.gtnhdumper.common.dumper.ItemIconDumper;
 import com.iouter.gtnhdumper.common.dumper.OreDictionaryDumper;
-import com.iouter.gtnhdumper.common.dumper.QuestDumper;
-import com.iouter.gtnhdumper.common.dumper.QuestLineDumper;
 import com.iouter.gtnhdumper.common.dumper.RecipesDumper;
-import com.iouter.gtnhdumper.common.dumper.TC4ResearchDumper;
 import com.iouter.gtnhdumper.common.dumper.TC4ThaumonomiconDumper;
 import com.iouter.gtnhdumper.common.dumper.TICMaterialDumper;
 import com.iouter.gtnhdumper.common.utils.ModFilter;
@@ -237,7 +230,6 @@ public final class ExportSession {
             defaults.addProperty("modFilter", "");
             defaults.addProperty("seed", 290002L);
             defaults.addProperty("smoke", false);
-            defaults.addProperty("layoutsOnly", false);
             defaults.addProperty("imagesOnly", false);
             defaults.addProperty("researchOnly", false);
             defaults.addProperty("imageDiagnostics", false);
@@ -598,20 +590,12 @@ public final class ExportSession {
     }
 
     private void addThaumcraft() {
-        add("tc4research", new TC4ResearchDumper(), 0);
         add("tc4thaumonomicon", new TC4ThaumonomiconDumper(), 0);
     }
 
     private void planTasks() {
         if (options.researchOnly) {
             addThaumcraft();
-            return;
-        }
-        if (options.layoutsOnly) {
-            tasks.add(
-                new ExportTask(
-                    "nei-layouts",
-                    () -> com.iouter.gtnhdumper.common.dumper.NEILayoutDumper.dump(new File(output, "nei-layouts"))));
             return;
         }
         if (options.smoke) {
@@ -625,6 +609,10 @@ public final class ExportSession {
                 new File(runDirectory, "recipe-scan-failures.json").toPath(),
                 GTNHDumper.GSON.toJson(RecipeItemVariants.failureDetails())
                     .getBytes(StandardCharsets.UTF_8));
+            Files.write(
+                new File(runDirectory, "item-variants-timing.json").toPath(),
+                GTNHDumper.GSON.toJson(com.iouter.gtnhdumper.common.utils.ScanTiming.report())
+                    .getBytes(StandardCharsets.UTF_8));
             if (!RecipeItemVariants.isComplete()) throw new IllegalStateException("Recipe item scan incomplete");
         }));
         if (!options.noImages) add("itemicon", new ItemIconDumper(), 0);
@@ -636,18 +624,17 @@ public final class ExportSession {
         add("fluid", new FluidsDumper(), 0);
         if (CommonProxy.isGTLoaded) {
             add("gtmaterial", new GTMaterialDumper(), 1);
-            add("gtorevein", new GTOreVeinDumper(), 0);
-            add("gtsmallorevein", new GTSmallOreVeinDumper(), 0);
-            add("gtundergroundfluid", new GTUndergroundFluidDumper(), 0);
             add("gtnhdimension", new GTNHDimensionDumper(), 0);
-            if (CommonProxy.isBR6343Loaded)
-                tasks.add(new ExportTask("structures", () -> new GTStructuresDumper().dumpFile()));
         }
         if (CommonProxy.isTiCLoaded) add("ticmaterial", new TICMaterialDumper(), 1);
         if (CommonProxy.isTCLoaded) addThaumcraft();
         if (CommonProxy.isBQLoaded) {
-            add("quest", new QuestDumper(), 0);
-            add("questline", new QuestLineDumper(), 0);
+            if (filter.isActive()) skipped.put("betterquesting", "The quest book belongs to the whole pack");
+            else tasks.add(
+                new ExportTask(
+                    "betterquesting",
+                    () -> com.iouter.gtnhdumper.common.utils.BetterQuestingFiles
+                        .copy(Minecraft.getMinecraft().mcDataDir, output)));
         }
     }
 
@@ -659,7 +646,6 @@ public final class ExportSession {
         result.addProperty("message", message);
         result.addProperty("updatedMillis", System.currentTimeMillis());
         result.addProperty("smoke", options.smoke);
-        result.addProperty("layoutsOnly", options.layoutsOnly);
         result.addProperty("imagesOnly", options.imagesOnly);
         result.addProperty("researchOnly", options.researchOnly);
         result.addProperty("outputMode", options.outputMode);

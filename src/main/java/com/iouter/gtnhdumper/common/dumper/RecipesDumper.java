@@ -185,6 +185,8 @@ public class RecipesDumper extends FilteredDataDumper {
 
     /** Visit all adapters without writing recipe files; item ownership is filtered afterwards. */
     public static void collectItemVariants() {
+        com.iouter.gtnhdumper.common.utils.ScanTiming.reset();
+        long fluidStart = System.nanoTime();
         // GT流体展示物品可能未出现在NEI列表中；与FluidsDumper按同一注册ID收集。
         // 补齐现有物品图标渠道，不创建独立的流体纹理导出。
         if (com.iouter.gtnhdumper.CommonProxy.isGTLoaded) {
@@ -200,16 +202,36 @@ public class RecipesDumper extends FilteredDataDumper {
                 RecipeItemVariants.capture(new net.minecraft.item.ItemStack(displayItem, 1, fluid.getID()));
             }
         }
+        com.iouter.gtnhdumper.common.utils.ScanTiming.add("fluidDisplay", null, System.nanoTime() - fluidStart);
         for (IRecipeHandler handler : GuiUsageRecipe.usagehandlers) {
             // NEI initializes lazy caches (including furnace fuels) when creating a query instance.
+            String timingName = handler.getClass()
+                .getName();
+            long phaseStart = System.nanoTime();
             if (handler instanceof TemplateRecipeHandler prototype)
                 handler = com.iouter.gtnhdumper.common.utils.NEIHandlerInstances.create(prototype);
+            com.iouter.gtnhdumper.common.utils.ScanTiming
+                .add("createInstance", timingName, System.nanoTime() - phaseStart);
             TemplateRecipeHandler template = handler instanceof TemplateRecipeHandler ? (TemplateRecipeHandler) handler
                 : null;
             List<TemplateRecipeHandler.CachedRecipe> previous = template == null ? null
                 : new ArrayList<>(template.arecipes);
             try {
-                RecipeItemVariants.captureDependencies(dumpRecipes(handler).build());
+                phaseStart = System.nanoTime();
+                com.google.gson.JsonObject built = dumpRecipes(handler).build();
+                com.iouter.gtnhdumper.common.utils.ScanTiming
+                    .add("convertRecipes", timingName, System.nanoTime() - phaseStart);
+                if (built != null && built.has("recipes")
+                    && built.get("recipes")
+                        .isJsonArray())
+                    com.iouter.gtnhdumper.common.utils.ScanTiming.recipes(
+                        timingName,
+                        built.getAsJsonArray("recipes")
+                            .size());
+                phaseStart = System.nanoTime();
+                RecipeItemVariants.captureDependencies(built);
+                com.iouter.gtnhdumper.common.utils.ScanTiming
+                    .add("captureDependencies", timingName, System.nanoTime() - phaseStart);
             } catch (Exception | LinkageError e) {
                 RecipeItemVariants.reportFailure(
                     handler.getClass()
@@ -217,6 +239,7 @@ public class RecipesDumper extends FilteredDataDumper {
                     e);
             } finally {
                 if (template != null) {
+                    phaseStart = System.nanoTime();
                     int recipeIndex = 0;
                     for (TemplateRecipeHandler.CachedRecipe recipe : template.arecipes) {
                         RecipeItemVariants.captureCachedRecipe(
@@ -227,6 +250,8 @@ public class RecipesDumper extends FilteredDataDumper {
                     }
                     template.arecipes.clear();
                     template.arecipes.addAll(previous);
+                    com.iouter.gtnhdumper.common.utils.ScanTiming
+                        .add("captureCachedRecipes", timingName, System.nanoTime() - phaseStart);
                 }
             }
         }

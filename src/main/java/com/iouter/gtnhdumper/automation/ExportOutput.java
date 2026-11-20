@@ -16,9 +16,13 @@ import com.iouter.gtnhdumper.common.utils.ModFilter;
 final class ExportOutput {
 
     private static final String[] DATA_FILES = { "advitempanel.json", "oreDictionary.json", "fluid.json",
-        "gtmaterial.json", "gtorevein.json", "gtsmallorevein.json", "gtundergroundfluid.json", "gtnhdimension.json",
-        "ticmaterial.json", "tc4research.json", "tc4thaumonomicon.json", "quest.json", "questline.json",
-        "recipes_filter_report.json", "structure-failures.json" };
+        "gtmaterial.json", "gtnhdimension.json", "ticmaterial.json", "tc4thaumonomicon.json",
+        "recipes_filter_report.json" };
+
+    /** Outputs of removed exporters; a full refresh deletes them so stale copies cannot be mistaken for data. */
+    private static final String[] REMOVED_FILES = { "gtorevein.json", "gtsmallorevein.json", "gtundergroundfluid.json",
+        "tc4research.json", "quest.json", "questline.json", "structure-failures.json" };
+    private static final String[] REMOVED_DIRECTORIES = { "structures", "nei-layouts" };
 
     final Path runDirectory;
     final Path outputDirectory;
@@ -76,16 +80,19 @@ final class ExportOutput {
             collectForDeletion(outputDirectory.resolve("tc4research.json"), false, deletionOrder);
             collectForDeletion(outputDirectory.resolve("tc4thaumonomicon.json"), false, deletionOrder);
             collectForDeletion(outputDirectory.resolve("tc4thaumonomicon-assets"), true, deletionOrder);
-        } else if (options.layoutsOnly) {
-            collectForDeletion(outputDirectory.resolve("nei-layouts"), true, deletionOrder);
         } else if (options.smoke) {
             collectForDeletion(outputDirectory.resolve("ticmaterial.json"), false, deletionOrder);
         } else {
             collectForDeletion(outputDirectory.resolve("recipes"), true, deletionOrder);
-            collectForDeletion(outputDirectory.resolve("structures"), true, deletionOrder);
             collectForDeletion(outputDirectory.resolve("tc4thaumonomicon-assets"), true, deletionOrder);
             for (String name : DATA_FILES) {
                 collectForDeletion(outputDirectory.resolve(name), false, deletionOrder);
+            }
+            for (String name : REMOVED_FILES) {
+                collectForDeletion(outputDirectory.resolve(name), false, deletionOrder);
+            }
+            for (String name : REMOVED_DIRECTORIES) {
+                collectForDeletion(outputDirectory.resolve(name), true, deletionOrder);
             }
         }
         // Preflight every selected tree before removing anything, so a redirected descendant preserves the old data.

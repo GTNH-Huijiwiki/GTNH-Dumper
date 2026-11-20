@@ -61,6 +61,7 @@ public final class RecipeItemVariants {
             if (expandWildcard && codechicken.lib.inventory.InventoryUtils.actualDamage(stack)
                 == net.minecraftforge.oredict.OreDictionary.WILDCARD_VALUE) {
                 boolean found = false;
+                long wildcardStart = System.nanoTime();
                 List<ItemStack> candidates = new ArrayList<>();
                 for (ItemStack candidate : codechicken.nei.ItemList.items) {
                     if (candidate.getItem() == stack.getItem()) candidates.add(candidate);
@@ -69,6 +70,7 @@ public final class RecipeItemVariants {
                 // for real metadata values rather than inventing a zero-damage subtype.
                 if (candidates.isEmpty()) stack.getItem()
                     .getSubItems(stack.getItem(), net.minecraft.creativetab.CreativeTabs.tabAllSearch, candidates);
+                ScanTiming.add("wildcardLookup", null, System.nanoTime() - wildcardStart);
                 for (ItemStack candidate : candidates) {
                     if (candidate.getItem() != stack.getItem()
                         || codechicken.lib.inventory.InventoryUtils.actualDamage(candidate)
@@ -172,7 +174,9 @@ public final class RecipeItemVariants {
         try {
             scan.run();
             // Include NBT variants declared only in recipe JSON.
+            long declaredStart = System.nanoTime();
             collector.recipeDependencies.forEach(RecipeItemVariants::captureDeclaredDependency);
+            ScanTiming.add("declaredDependencies", null, System.nanoTime() - declaredStart);
             result = new ArrayList<>(collector.stacks.values());
             dependencies = collector.recipeDependencies;
             cachedFailures = collector.failures;

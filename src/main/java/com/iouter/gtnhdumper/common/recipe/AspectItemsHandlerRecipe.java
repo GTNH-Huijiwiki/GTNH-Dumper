@@ -31,8 +31,9 @@ public class AspectItemsHandlerRecipe extends BaseHandlerRecipe {
         if (selection.isActive() && !selection.matches(new ItemStack(ModItems.itemAspect)))
             return java.util.Collections.emptyList();
         Map<Aspect, List<ItemStack>> groups = new LinkedHashMap<>();
+        long started = System.nanoTime();
         for (ItemStack item : ItemList.items) {
-            AspectList tags = ThaumcraftCraftingManager.getObjectTags(item);
+            AspectList tags = com.iouter.gtnhdumper.common.utils.AspectTagsCache.objectTags(item);
             tags = ThaumcraftCraftingManager.getBonusTags(item, tags);
             if (tags == null) continue;
             for (Aspect aspect : tags.getAspects()) {
@@ -43,6 +44,10 @@ public class AspectItemsHandlerRecipe extends BaseHandlerRecipe {
                     .add(copy);
             }
         }
+        com.iouter.gtnhdumper.GTNHDumper.LOG.info(
+            "Aspect lookup for {} NEI items took {} ms",
+            ItemList.items.size(),
+            (System.nanoTime() - started) / 1_000_000L);
         List<Map<String, Object>> recipes = new ArrayList<>();
         for (Map.Entry<Aspect, List<ItemStack>> group : groups.entrySet()) {
             group.getValue()

@@ -28,6 +28,12 @@ public final class LegacyNbtParser {
         boolean escaped = false;
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
+            if (quoted && !escaped && c == '"' && !closesString(text, i)) {
+                // 1.7 writes string tags as '"' + value + '"' without escaping, so a quote inside the value is
+                // only recognizable by what follows it; escape it for JsonToNBT.
+                safe.append("\\\"");
+                continue;
+            }
             safe.append(c);
             if (quoted) {
                 if (escaped) escaped = false;
@@ -49,6 +55,16 @@ public final class LegacyNbtParser {
         NBTBase result = JsonToNBT.func_150315_a(safe.toString());
         restore(result, keys);
         return result;
+    }
+
+    /** A quote ends a string value only when the value is followed by a separator or the end of the text. */
+    private static boolean closesString(String text, int quote) {
+        for (int i = quote + 1; i < text.length(); i++) {
+            char next = text.charAt(i);
+            if (Character.isWhitespace(next)) continue;
+            return next == ',' || next == '}' || next == ']';
+        }
+        return true;
     }
 
     private static void restore(NBTBase tag, Map<String, String> keys) {

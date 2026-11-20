@@ -19,8 +19,8 @@
 
 NEI 选项 → 工具 → 数据导出 → GTNH Dumper 里的 **TC4 Thaumonomicon** 一次导出整本手册，
 写入 `tc4thaumonomicon.json`，并把用到的贴图复制到 `tc4thaumonomicon-assets/<域名>/<路径>`。
-自动导出（`researchOnly` 或全量）也会生成它。文件包含 `tc4research.json` 的全部字段（同名同值），
-因此可以完全替代它；`tc4research.json` 仍照常导出。
+自动导出（`researchOnly` 或全量）也会生成它。它取代了原来的 `tc4research.json`，包含其全部字段（同名同值），
+原研究导出已移除。
 
 顶层分三段，都是按注册顺序排列的映射：
 
@@ -42,7 +42,7 @@ NEI 选项 → 工具 → 数据导出 → GTNH Dumper 里的 **TC4 Thaumonomico
     的 `recipes` 数组为同页轮播的各个配方；`compound_crafting` 为结构页，`blocks` 给出每块的 x/y/z；
     `smelting` 为熔炼。物品槽沿用配方导出的格式（物品、候选数组、`#矿辞`，空槽为 null）。
     无法识别的页面或配方输出 `unsupported` 并记录类名。
-  - `sourceMod`：与 `tc4research.json` 相同。
+  - `sourceMod`：研究的注册来源 Mod。
 
 页面文字保持 Thaumcraft 原样：`<BR>` 换行，`<LINE>` 分隔线，
 `<IMG>域名:路径:u:v:宽:高:缩放</IMG>` 插图（引用的贴图已一并复制），`§` 为格式码。文字使用游戏当前语言。
@@ -87,7 +87,7 @@ GT 配方需要在加载配方前开启 `config/GregTech/Client.cfg` 的 `NEIRec
 等缺少来源记录的自定义配方仍可按物品产物匹配；来源匹配的限制会在 `recipes_filter_report.json`
 和游戏提示中说明。清空筛选仍可全量导出这些配方。
 
-任务、任务线、TiC 材料、矿脉及维度等没有可靠逐项 Mod 归属的数据，在开启筛选时会提示并停止该项导出。
+TiC 材料及维度等没有可靠逐项 Mod 归属的数据，在开启筛选时会提示并停止该项导出。
 
 研究来源捕获使用 UniMixins 的延迟加载入口，仅在安装 Thaumcraft 时启用；运行 Dumper 需安装 UniMixins。
 
@@ -140,7 +140,7 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 | `noImages` | `true` | 跳过物品图标任务；改为 `false` 时导出图标及动画 |
 | `modFilter` | `""` | 全量导出；填入已加载 Mod 的 ID 或完整名称后按前述来源规则筛选 |
 
-`latest` 在世界和 NEI 准备完成后更新本次范围的数据。旧配方、结构目录会先清除，
+`latest` 在世界和 NEI 准备完成后更新本次范围的数据。旧配方目录会先清除，
 因此附属更新时删除的配方也会从结果中移除。全量与各 Mod 的结果分别保存；
 例如 `modFilter: "gregtech"` 写入 `dumper-runs/latest/filtered/gregtech/dumps/`，
 对应的请求与状态也保存在这个 Mod 的目录中。
@@ -149,7 +149,39 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 `noImages: true` 保留该目录中的 `icons/`、`itemicon.json` 与图片重定向文件。
 首次只导出数据时得到配方、物品等 JSON；图片及动画映射可以沿用已有图标导出，
 需要补充新物品或更新纹理时设置 `noImages: false`。
-图标导出仍使用最大 PNG 压缩。`imagesOnly` 和 `layoutsOnly` 明确请求捕获素材，优先于 `noImages`。
+图标导出仍使用最大 PNG 压缩。`imagesOnly` 明确请求捕获素材，优先于 `noImages`。
+
+#### 图标缓存、像素哈希与渲染稳定性
+
+- **并行编码**：渲染仍在客户端线程，PNG 编码交给后台线程，默认 CPU 核数减 2（最多 16）。
+  待编码像素按字节限额排队，默认 512 MB。
+- **内容缓存**：每张图按像素计算 SHA-1，编码结果存进 `.minecraft/dumper-cache/png/<前两位>/<哈希>.png`，
+  输出目录里的文件是指向缓存的硬链接（不支持时复制）。同一实例再次导出时，像素没变的图片不再编码，
+  `icon-performance.json` 的 `pngCacheHits` 记录命中数。缓存可以随时删除，下次导出重新生成。
+  不要原地修改输出目录里的 PNG，否则会改坏缓存；需要修改时先复制。
+- **像素哈希清单**：`icon-hashes.json` 的 `images` 把每个 PNG 文件名映射到像素哈希
+  （`sha1("宽:高:" + 按行的 ARGB 大端字节)`）。哈希只看像素，与 PNG 编码无关；工具链用它比较两次导出。
+- **动画帧条上限**：帧条长度是所有动画帧数的最小公倍数，可能远超内存。原始帧条超过 256 MB 的动画
+  只导出静态图，记在 `icon-performance.json` 的 `oversizedAnimations`。海晶石系列（帧条可达 1.65 GB）固定导出静态图。
+- **固定渲染时钟**：渲染图标期间，`Minecraft.getSystemTime()`（附魔光效、随时间变色）、世界时间与渲染插值
+  （刷怪笼生物、旋转模型）、玩家 tick 都固定为同一值，结束后恢复，`frozenRenderClock` 记录所用的值。
+  图集里所有动画贴图也重置到第一帧（`resetAnimatedSprites` 记录数量）：流体单元、水晶瓶、外观板等画的是流体贴图，
+  不是物品自己的图标，否则会停在导出开始时图集恰好显示的那一帧（Hodgepodge 只推进最近画过的贴图），每次导出都可能不同。
+  模组自己的动画计数器也固定（GT `mAnimationTick`、植物魔法 `ticksInGame`、神秘工匠 `elapsedTicks`，`frozenCounters` 记录数量）；
+  直接读系统时间的物品渲染器由 `mixins/clock/` 改读冻结时钟（林业蝴蝶与蜜蜂、龙研地球、Gadomancy 节点与使魔、
+  巫术小玩意原初手套、GT 故障特效），只在导出图标期间生效；渲染时新建的生物（生物灵魂、刷怪笼、奖杯）随机数和 UUID 按类名固定。
+  直接读系统时间或随机数的渲染器仍会每次不同，由工具链比较两次导出的 `icon-hashes.json` 记为不稳定图标。
+
+这些设置可以用 JVM 参数调整：
+
+| JVM 参数 | 默认值 | 作用 |
+| --- | --- | --- |
+| `-Dgtnhdumper.pngWorkers=N` | CPU 核数 − 2，最多 16 | PNG 编码线程数；`0` 表示在渲染线程上同步编码 |
+| `-Dgtnhdumper.pngQueueMB=N` | `512` | 待编码像素的内存上限 |
+| `-Dgtnhdumper.pngCache=false` | `true` | 关闭内容缓存，直接写 PNG |
+| `-Dgtnhdumper.maxAnimationMB=N` | `256` | 单个动画帧条的原始大小上限 |
+
+整合包实例建议最大内存设为 8 GB 或以上。
 
 ### 只更新一个附属
 
@@ -165,12 +197,11 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 
 筛选复用手动导出的归属规则，保留命中配方中的全部跨 Mod 原料与产物。
 物品与流体 JSON 只包含该 Mod 的条目，处理附属数据时与基础包的物品库组合使用。
-任务和矿脉等缺少逐项归属的数据会列入 `status.json` 的 `skipped`，其余任务继续完成。
+维度等缺少逐项归属的数据会列入 `status.json` 的 `skipped`，其余任务继续完成。
 配方来源缺失的分类另见 `recipes_filter_report.json`；GT 配方的来源采集需要提前开启 `NEIRecipeOwner`。
 `modFilter` 只控制本次自动会话，手动 NEI 筛选设置保持原值。
 
-`layoutsOnly` 的界面范围与配方注册来源不同，`smoke` 使用的 TiC 材料也缺少逐项归属；
-运行这两种模式时使用空 `modFilter`。配置组合错误会在创建存档、清理旧数据前报告。
+`smoke` 使用的 TiC 材料缺少逐项归属，运行该模式时使用空 `modFilter`。配置组合错误会在创建存档、清理旧数据前报告。
 
 ### 存档与结束流程
 
@@ -180,8 +211,7 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 清理失败会报告 `FAILED`，保留剩余内容。`EXPORTED` 表示导出任务及存档退出流程完成；随后可用数据处理工具检查物品关联和图片完整性。
 
 可选参数：`runId`（1–101 位字母、数字、下划线或连字符，首字符必须是字母或数字，默认自动生成）、
-`seed`（默认 `290002`）、`smoke: true`（仅导出 TiC 材料以检查生命周期）、
-`layoutsOnly: true`（仅导出 NEI 布局原始资料）。两种模式同时开启时优先使用 `layoutsOnly`。
+`seed`（默认 `290002`）、`smoke: true`（仅导出 TiC 材料以检查生命周期）。
 时间戳模式的 `runId` 必须唯一，`latest` 为固定输出目录的保留名称。
 
 设置 `noImages: false` 后可以使用以下图标复用参数。
@@ -202,10 +232,10 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 
 ### 只更新研究数据
 
-设置 `researchOnly: true` 只运行神秘时代研究导出，支持同时指定 `modFilter`。
+设置 `researchOnly: true` 只运行魔导手册导出，支持同时指定 `modFilter`。
 它使用已注册的研究表，跳过物品扫描、图片导出与玩家研究解锁；仍沿用自动建档、退出和存档清理流程。
-此模式与 `imagesOnly`、`layoutsOnly`、`smoke` 互斥，要求安装 Thaumcraft。
-`outputMode: "latest"` 只清理并重新写入 `tc4research.json`，保留其他导出数据。
+此模式与 `imagesOnly`、`smoke` 互斥，要求安装 Thaumcraft。
+`outputMode: "latest"` 只清理并重新写入 `tc4thaumonomicon.json` 及其贴图，保留其他导出数据。
 
 ```json
 {"enabled":true,"researchOnly":true,"noImages":true,"exitGame":true}
@@ -226,3 +256,20 @@ GT 两种超立方体由客户端 RenderTick 同时按 50 ms 目标间隔采样 
 特殊物品的选择规则和参数集中在 `ItemIconRenderProfile`，按注册名与 damage 选择，同一物品的 NBT 变体使用相同配置。
 定时采样与关闭面剔除分别配置；超立方体在绘制期间关闭剔除，以保留 Angelica 将宽线展开成的三角形，随后恢复原状态。
 普通物品保留现有静态图和纹理动画导出流程。当前所有定时采样物品共用一组采样参数。
+
+## 任务书源文件
+
+全量自动导出时，如果加载了 BetterQuesting，会把任务书源文件复制到 `dumps/betterquesting/`，
+让工具链从同一份导出读取任务数据：
+
+- `DefaultQuests/`：`config/betterquesting/DefaultQuests/` 原样复制（任务、任务线、`QuestLinesOrder.txt`）。
+- `lang/`：整合包翻译放在 `config/txloader/forceload/betterquesting/lang/` 的各语言文件。
+
+每次导出先清空该目录再复制；按 Mod 导出时跳过。
+
+## 已移除的导出
+
+以下导出没有被数据处理工具链使用，已经移除：GT 矿脉、GT 小矿、GT 地下流体（维基改由
+`gtneioreplugin` 的 NEI 配方重建）、GT 结构、任务与任务线（任务由 BetterQuesting 的任务文件处理）、
+旧的神秘时代研究表 `tc4research.json`（由魔导手册导出取代），以及自动导出的 `layoutsOnly` NEI 布局模式。
+自动导出的 `latest` 全量刷新会删除这些旧文件，避免误用过期数据。
