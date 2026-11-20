@@ -3,6 +3,57 @@
 
  Special thanks : https://github.com/GTNewHorizons/ExampleMod1.7.10
 
+## 维度与星系参数
+
+`gtnhdimension.json` 合并原有 GTNEI 条目和 Forge 当前注册表中尚未覆盖的所有维度（包括 Random Things）。
+外层统一使用 `key` 标识记录：旧条目沿用原缩写，新条目使用 `dim:<ID>`，冲突时添加 `forge:` 前缀。
+追加条目按维度 ID 排序。尚未在当前会话注册的动态维度不在导出范围内。
+
+GTNEI 专有数据统一放在可选的 `gtneiInfo` 对象中：`abbreviatedName`、`internalName`、`fullName`、
+`originalName`（英文名）、`localizedName`（当前语言名）、`tier`（保留数值类型）和 `stoneTypes`（矿石宿主岩石类型列表）。
+这些字段不再在外层重复；没有 GTNEI 资料的维度省略整个 `gtneiInfo`，不生成假缩写、等级或岩石数据。
+
+仍支持 List/Map 两种格式，但结构已更新：List 格式为 `{"dimensions": [...]}`（旧容器名为 `abbreviatedName`），
+Map 格式仍以原有键值索引记录。外层 `key` 取代原来的 `abbreviatedName`；读取旧字段的程序需改用 `gtneiInfo.<字段>`。
+外层通用信息包括：
+
+- `dimensionId`、`providerTypeId`、`providerClass`：实际注册的维度 ID、Provider 类型 ID 和实现类。
+  同一 Provider 类型可以供多个维度使用；这些 ID 使用本次整合包及存档的注册值。
+- `dimensionName`、`saveFolder`：Provider 返回的名称和存档子目录。主世界默认目录为空，JSON 省略该字段。
+- `movementFactor`：坐标换算系数，默认传送规则为目标 X/Z = 原 X/Z × 原维度系数 ÷ 目标维度系数。
+- `canRespawnHere`、`isSurfaceWorld`、`isHellWorld`、`hasNoSky`：重生、地表及环境标志。
+  重生标志不等于完整的床使用规则；`hasNoSky` 指天空光照标志，不代表没有天空画面。
+- `height`、`actualHeight`、`averageGroundLevel`、`horizon`、`cloudHeight`：Provider 报告的高度参数，
+  不是地形扫描结果，也不把 `actualHeight` 视为建筑高度上限。
+- `shouldLoadSpawn`：Forge Provider 的出生区域加载设置，不表示全部区块常驻。
+
+维度从 Forge 当前注册表匹配，优先使用 Provider 名称及天体内部标识，必要时使用英文名称。
+原有条目的 `dimensionLookup` 为 `matched`、`unmatched` 或 `ambiguous`；后两者附带 `candidateDimensionIds`，
+不猜测 `dimensionId`。新追加的 Forge 条目标记为 `registered`，直接使用注册 ID，同名维度分别保留。
+Provider 创建失败也保留注册记录，以 `providerState: "unavailable"` 及 `readErrors` 标明原因。
+NEI 中的虚拟地点不一定有独立的实际维度。
+
+导出不会创建、热加载世界，也不会把其他世界绑定到待导出的 Provider。
+`providerState: "loaded"` 表示使用已绑定世界的 Provider；`"unbound"` 表示新建的未绑定实例。
+未绑定实例仅尝试读取名称、存档目录、坐标比例、重生、地表、`height` 及星系接口参数。
+环境字段和其余高度字段需要正确的世界初始化，未加载时省略，避免输出下界等维度的错误默认值。
+模组的其他 getter 也可能依赖世界；读取失败只省略该字段，并在对应对象的 `readErrors` 记录字段及异常类型。
+零值、负值和 `false` 原样保留。
+
+星系维度额外包含 `galacticSpaceInfo`，普通维度省略此对象：
+
+- `celestialBody`：内部名、翻译键、当前语言名、类型、可达性、火箭等级要求、空间站许可、
+  大气成分、图标路径、相对大小、轨道距离／周期／相位、母天体和恒星系信息。
+  `tierRequired` 与 `gtneiInfo.tier` 分开保存；轨道参数是游戏相对值，大气列表不表示浓度。
+- `gravity`、`fallDamageModifier`、`thermalLevelModifier`、`windLevel`、`hasBreathableAtmosphere`、
+  `soundVolReductionAmount`、`meteorFrequency`：环境参数。重力和热环境等是原始游戏参数，非 SI 单位或摄氏温度。
+- `fuelUsageMultiplier`、`netherPortalsOperational`、`exitHeight`：航行及传送参数。
+- `solarSize`、`solarEnergyMultiplier`、`dayLengthTicks`、`canRainOrSnow`、`hasSunset`：日照和天气参数。
+- 支持对应扩展接口时，补充 `atmosphericPressure`、`solarRadiation`、`lightningStormFrequency`。
+  不支持的属性省略；`providerState` 同样适用于此对象，未绑定实例读取的值应结合实际导出核对。
+
+本项仍不支持按 Mod 筛选。运行 `gradlew checkDimensionExport` 可检查维度匹配、未初始化字段、异常隔离和星系结构。
+
 ## 板材切割机数据
 
 板材切割机从真实的 `cutterRecipes` 配方池读取数据，按物品输入、输出和原始
