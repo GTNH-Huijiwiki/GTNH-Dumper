@@ -641,6 +641,12 @@ public final class ExportSession {
             new ExportTask(
                 "biomes",
                 () -> com.iouter.gtnhdumper.common.utils.BiomeExport.write(new File(output, "biomes.json"))));
+        if (filter.isActive()) skipped.put("achievements", "Achievements belong to the whole pack");
+        else tasks.add(
+            new ExportTask(
+                "achievements",
+                () -> com.iouter.gtnhdumper.common.utils.AchievementExport
+                    .write(new File(output, "achievements.json"))));
         if (!options.tasks.isEmpty()) keepSelectedTasks();
     }
 
