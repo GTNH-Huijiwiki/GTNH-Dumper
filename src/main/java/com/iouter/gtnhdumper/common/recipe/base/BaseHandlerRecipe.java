@@ -2,6 +2,7 @@ package com.iouter.gtnhdumper.common.recipe.base;
 
 import static com.iouter.gtnhdumper.GTNHDumper.GSON;
 
+import java.util.Comparator;
 import java.util.List;
 
 import net.minecraft.item.ItemStack;
@@ -14,6 +15,7 @@ import com.google.gson.JsonObject;
 import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
 import com.iouter.gtnhdumper.common.utils.RecipeSelection;
 import com.iouter.gtnhdumper.common.utils.RecipeUtil;
+import com.iouter.gtnhdumper.common.utils.StableOrder;
 
 import codechicken.nei.recipe.GuiRecipeTab;
 import codechicken.nei.recipe.HandlerInfo;
@@ -79,11 +81,11 @@ public abstract class BaseHandlerRecipe {
     private JsonElement serializeRecipes(IRecipeHandler handler) {
         List<?> recipes = getRecipes(handler);
         if (recipes == null) return JsonNull.INSTANCE;
-        JsonArray result = new JsonArray();
+        List<JsonElement> serialized = new java.util.ArrayList<>(recipes.size());
         for (int index = 0; index < recipes.size(); index++) {
             Object recipe = recipes.get(index);
             try {
-                result.add(GSON.toJsonTree(recipe));
+                serialized.add(GSON.toJsonTree(recipe));
             } catch (StackOverflowError error) {
                 // Gson's recursive frames erase the caller from the crash stack; retain the exact source record.
                 throw new IllegalStateException(
@@ -102,7 +104,36 @@ public abstract class BaseHandlerRecipe {
                     error);
             }
         }
+        JsonArray result = new JsonArray();
+        // 采集物品变体时只关心内容；写文件时再固定顺序。
+        if (RecipeItemVariants.isCollecting()) {
+            serialized.forEach(result::add);
+            return result;
+        }
+        if (StableOrder.unorderedProducts(handler)) {
+            for (JsonElement element : serialized) {
+                if (element.isJsonObject()) StableOrder.sortProducts(element.getAsJsonObject());
+            }
+        }
+        Comparator<Object> order = recipeOrder(handler);
+        if (order == null) {
+            serialized.forEach(result::add);
+        } else {
+            for (int index : StableOrder.order(recipes, serialized, order == ANY_ORDER ? null : order))
+                result.add(serialized.get(index));
+        }
         return result;
+    }
+
+    /** 源列表没有可依赖的顺序，只按 JSON 文本排序。 */
+    protected static final Comparator<Object> ANY_ORDER = (a, b) -> 0;
+
+    /**
+     * 配方顺序：null 保留处理器给出的顺序；否则按返回的比较器排序，相等时按 JSON 文本。
+     * 用于来源是 HashMap 或按哈希顺序注册的处理器。
+     */
+    protected Comparator<Object> recipeOrder(IRecipeHandler handler) {
+        return StableOrder.unorderedRecipes(handler) ? ANY_ORDER : null;
     }
 
     public void addJsonObject(JsonObject json, IRecipeHandler handler) {

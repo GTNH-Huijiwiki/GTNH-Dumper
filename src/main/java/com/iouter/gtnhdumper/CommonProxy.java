@@ -41,6 +41,8 @@ public class CommonProxy {
         KeySimulator.test();
     }
 
+    public void loadComplete(cpw.mods.fml.common.event.FMLLoadCompleteEvent event) {}
+
     public void serverAboutToStart(FMLServerAboutToStartEvent event) {}
 
     // register server commands in this event handler

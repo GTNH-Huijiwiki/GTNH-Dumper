@@ -73,6 +73,9 @@ public class AllItemStacks {
                             .getNameForObject(stack.getItem()));
                 }
             }
+            // 配方扫描补充的变体按扫描顺序追加，少数物品（刷怪笼、药水等）的子物品也来自 HashMap，
+            // 每次启动顺序不同。按 StableOrder.ITEMS 排列。
+            itemStacks.sort(StableOrder.ITEMS);
             registryNames = itemRegistryNames;
             result = itemStacks;
             if (creativeFailures == 0 && RecipeItemVariants.isComplete()) allItemStacks = result;

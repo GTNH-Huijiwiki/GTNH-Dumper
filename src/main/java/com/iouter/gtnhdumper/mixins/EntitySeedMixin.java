@@ -12,11 +12,12 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import com.iouter.gtnhdumper.common.utils.IconRenderClock;
+import com.iouter.gtnhdumper.common.utils.EntitySeeds;
 
 /**
  * Item renderers that draw a mob (mob souls, spawners, trophies) create the entity while rendering. During icon export
  * the entity's random generator and UUID are seeded from its class, so its pose and random looks repeat across runs.
+ * MobsInfo's mob list generation uses the same seeding (random boss names, slime sizes and thus health).
  */
 @Mixin(Entity.class)
 public abstract class EntitySeedMixin {
@@ -29,7 +30,7 @@ public abstract class EntitySeedMixin {
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void gtnhdumper$seed(World world, CallbackInfo callback) {
-        if (!IconRenderClock.isFrozen()) return;
+        if (!EntitySeeds.active()) return;
         long seed = getClass().getName()
             .hashCode();
         rand.setSeed(seed);

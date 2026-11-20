@@ -115,7 +115,8 @@ public class Transformer {
             metadata).withSourceMod(GTDefaultHandlerRecipe.originalOwner(src))
                 .withNbtSensitive(src.isNBTSensitive)
                 .withInputAspects(inputAspects)
-                .withDisplayData(src);
+                .withDisplayData(src)
+                .withSource(src);
     }
 
     /** 工业注魔与炼金的源质需求沿用神秘时代的 inputAspects 结构；其他特殊槽保持原有语义。 */
@@ -196,7 +197,8 @@ public class Transformer {
                 inputItems.add(
                     RecipeUtil.getRecipeItems(
                         NEIServerUtils.extractRecipeItems(GTOreDictUnificator.getNonUnifiedStacks(stack)),
-                        chance));
+                        chance,
+                        true));
             }
         }
         if (inputItems.isEmpty()) return null;

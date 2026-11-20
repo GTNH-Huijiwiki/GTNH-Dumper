@@ -27,10 +27,16 @@ public class AspectListSerializer implements JsonSerializer<AspectList> {
                 .allMatch(Objects::isNull)) {
             return null;
         }
-        for (Aspect aspect : aspects.keySet()) {
-            if (aspect == null) {
-                continue;
-            }
+        // 部分模组用 HashMap 拼出要素表，插入顺序每次启动不同；按要素注册顺序输出（基础要素在前）。
+        java.util.List<Aspect> registered = new java.util.ArrayList<>(Aspect.aspects.values());
+        java.util.List<Aspect> keys = new java.util.ArrayList<>();
+        for (Aspect aspect : aspects.keySet()) if (aspect != null) keys.add(aspect);
+        keys.sort(java.util.Comparator.comparingInt((Aspect aspect) -> {
+            int index = registered.indexOf(aspect);
+            return index < 0 ? Integer.MAX_VALUE : index;
+        })
+            .thenComparing(Aspect::getTag));
+        for (Aspect aspect : keys) {
             obj.addProperty(aspect.getName(), aspects.get(aspect));
         }
         return obj;

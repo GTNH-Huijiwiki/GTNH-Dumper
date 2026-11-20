@@ -50,6 +50,11 @@ public class GTNHDumper {
     }
 
     @Mod.EventHandler
+    public void loadComplete(cpw.mods.fml.common.event.FMLLoadCompleteEvent event) {
+        proxy.loadComplete(event);
+    }
+
+    @Mod.EventHandler
     public void serverAboutToStart(FMLServerAboutToStartEvent event) {
         proxy.serverAboutToStart(event);
     }

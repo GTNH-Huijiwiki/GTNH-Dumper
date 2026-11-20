@@ -45,7 +45,9 @@ public class CropsNHHandlerRecipe extends BaseHandlerRecipe {
                 data.put("inputItems", Utils.getRecipeItems(recipe.getIngredients()));
                 data.put("outputItems", otherItems);
                 try {
-                    data.put("additionalInformation", NEIDisplayHandlerRecipe.field(recipe, "textLines"));
+                    data.put(
+                        "additionalInformation",
+                        sortedBiomeLine(cropCard, (List<?>) NEIDisplayHandlerRecipe.field(recipe, "textLines")));
                 } catch (ReflectiveOperationException e) {
                     throw new IllegalStateException("Cannot read CropsNH crop information", e);
                 }
@@ -59,14 +61,39 @@ public class CropsNHHandlerRecipe extends BaseHandlerRecipe {
         return recipes;
     }
 
+    /** 喜好群系来自 HashSet，NEI 文本里的顺序每次启动不同；同一行改为按群系类型的声明顺序列出。 */
+    private static List<Object> sortedBiomeLine(ICropCard crop, List<?> lines) {
+        String key = "cropsnh_nei.crops.likes";
+        java.util.function.Function<java.util.stream.Stream<net.minecraftforge.common.BiomeDictionary.Type>, String> line = types -> net.minecraft.util.StatCollector
+            .translateToLocalFormatted(
+                key,
+                types
+                    .map(
+                        type -> net.minecraft.util.StatCollector.translateToLocal(
+                            "cropsnh_tooltip.biomeTag." + type.name()
+                                .toUpperCase()))
+                    .collect(java.util.stream.Collectors.joining(", ")));
+        String shown = line.apply(
+            crop.getLikedBiomeTags()
+                .stream());
+        String sorted = line.apply(
+            crop.getLikedBiomeTags()
+                .stream()
+                .sorted());
+        List<Object> result = new ArrayList<>(lines);
+        result.replaceAll(text -> shown.equals(text) ? sorted : text);
+        return result;
+    }
+
     private static ArrayList<Object> getRecipeItems(ICropCard cropCard) {
         ArrayList<Object> items = new ArrayList<>();
         for (Map.Entry<ItemStack, Integer> drop : cropCard.getDropTable()
             .entrySet()
             .stream()
             .sorted(
-                Map.Entry.<ItemStack, Integer>comparingByValue()
-                    .reversed())
+                java.util.Comparator.comparing((Map.Entry<ItemStack, Integer> entry) -> entry.getValue())
+                    .reversed()
+                    .thenComparing(Map.Entry::getKey, com.iouter.gtnhdumper.common.utils.StableOrder.ITEMS))
             .collect(java.util.stream.Collectors.toList())) {
             items.add(RecipeUtil.getRecipeItems(new ItemStack[] { drop.getKey() }, drop.getValue()));
         }

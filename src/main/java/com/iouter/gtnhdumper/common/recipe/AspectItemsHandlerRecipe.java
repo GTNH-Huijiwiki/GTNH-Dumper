@@ -49,11 +49,16 @@ public class AspectItemsHandlerRecipe extends BaseHandlerRecipe {
             ItemList.items.size(),
             (System.nanoTime() - started) / 1_000_000L);
         List<Map<String, Object>> recipes = new ArrayList<>();
-        for (Map.Entry<Aspect, List<ItemStack>> group : groups.entrySet()) {
+        // NEI 物品列表并行加载，顺序每次不同：要素按注册顺序，物品按要素量从高到低、同量按物品次序。
+        List<Map.Entry<Aspect, List<ItemStack>>> ordered = new ArrayList<>(groups.entrySet());
+        List<Aspect> registered = new ArrayList<>(Aspect.aspects.values());
+        ordered.sort(Comparator.comparingInt(group -> registered.indexOf(group.getKey())));
+        for (Map.Entry<Aspect, List<ItemStack>> group : ordered) {
             group.getValue()
                 .sort(
                     Comparator.comparingInt((ItemStack stack) -> stack.stackSize)
-                        .reversed());
+                        .reversed()
+                        .thenComparing(com.iouter.gtnhdumper.common.utils.StableOrder.ITEMS));
             ItemStack aspect = new ItemStack(ModItems.itemAspect);
             ItemAspect.setAspect(aspect, group.getKey());
             for (int start = 0; start < group.getValue()
