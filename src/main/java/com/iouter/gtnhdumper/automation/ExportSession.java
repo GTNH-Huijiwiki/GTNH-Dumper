@@ -628,6 +628,14 @@ public final class ExportSession {
         }
         if (CommonProxy.isTiCLoaded) add("ticmaterial", new TICMaterialDumper(), 1);
         if (CommonProxy.isTCLoaded) addThaumcraft();
+        if (CommonProxy.isBQLoaded) {
+            if (filter.isActive()) skipped.put("betterquesting", "The quest book belongs to the whole pack");
+            else tasks.add(
+                new ExportTask(
+                    "betterquesting",
+                    () -> com.iouter.gtnhdumper.common.utils.BetterQuestingFiles
+                        .copy(Minecraft.getMinecraft().mcDataDir, output)));
+        }
     }
 
     private void status(String newStage, String message) throws IOException {

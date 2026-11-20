@@ -252,6 +252,16 @@ GT 两种超立方体由客户端 RenderTick 同时按 50 ms 目标间隔采样 
 定时采样与关闭面剔除分别配置；超立方体在绘制期间关闭剔除，以保留 Angelica 将宽线展开成的三角形，随后恢复原状态。
 普通物品保留现有静态图和纹理动画导出流程。当前所有定时采样物品共用一组采样参数。
 
+## 任务书源文件
+
+全量自动导出时，如果加载了 BetterQuesting，会把任务书源文件复制到 `dumps/betterquesting/`，
+让工具链从同一份导出读取任务数据：
+
+- `DefaultQuests/`：`config/betterquesting/DefaultQuests/` 原样复制（任务、任务线、`QuestLinesOrder.txt`）。
+- `lang/`：整合包翻译放在 `config/txloader/forceload/betterquesting/lang/` 的各语言文件。
+
+每次导出先清空该目录再复制；按 Mod 导出时跳过。
+
 ## 已移除的导出
 
 以下导出没有被数据处理工具链使用，已经移除：GT 矿脉、GT 小矿、GT 地下流体（维基改由
