@@ -212,6 +212,15 @@ val checkSuperTicTooltip by tasks.registering(JavaExec::class) {
 
 tasks.check.configure { dependsOn(checkSuperTicTooltip) }
 
+val checkDimensionExport by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Checks dimension identity, unloaded providers, isolated getters and optional celestial metadata."
+    classpath(configurations.compileClasspath, functionalTest.runtimeClasspath, sourceSets.main.get().output, sourceSets.patchedMc.get().output)
+    mainClass.set("com.iouter.gtnhdumper.common.utils.DimensionExportRegression")
+}
+
+tasks.check.configure { dependsOn(checkDimensionExport) }
+
 val checkRecipeNbtDependencies by tasks.registering(JavaExec::class) {
     group = "verification"
     description = "Checks exact cross-mod NBT dependencies in filtered recipes."
