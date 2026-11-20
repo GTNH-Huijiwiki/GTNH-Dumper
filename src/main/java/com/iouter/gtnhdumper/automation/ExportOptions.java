@@ -1,5 +1,12 @@
 package com.iouter.gtnhdumper.automation;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 /** Export scope selected by the one-shot request, independent of the NEI options screen. */
@@ -11,6 +18,22 @@ final class ExportOptions {
     final boolean imagesOnly;
     final boolean researchOnly;
     final boolean noImages;
+    /** Selected export tasks; empty means the full export. */
+    final Set<String> tasks;
+
+    /** Task names accepted by {@code tasks}, in export order. */
+    static final List<String> TASK_NAMES = Collections.unmodifiableList(
+        Arrays.asList(
+            "itemicon",
+            "advitempanel",
+            "recipes",
+            "oreDictionary",
+            "fluid",
+            "gtmaterial",
+            "gtnhdimension",
+            "ticmaterial",
+            "tc4thaumonomicon",
+            "betterquesting"));
 
     ExportOptions(JsonObject request) {
         outputMode = request.has("outputMode") ? request.get("outputMode")
@@ -30,8 +53,21 @@ final class ExportOptions {
         if (imagesOnly && smoke) {
             throw new IllegalArgumentException("imagesOnly excludes smoke");
         }
+        Set<String> selected = new LinkedHashSet<>();
+        if (request.has("tasks")) for (JsonElement task : request.getAsJsonArray("tasks")) {
+            String name = task.getAsString();
+            if (!TASK_NAMES.contains(name))
+                throw new IllegalArgumentException("Unknown task " + name + "; valid tasks: " + TASK_NAMES);
+            selected.add(name);
+        }
+        tasks = Collections.unmodifiableSet(selected);
+        if (!tasks.isEmpty() && (researchOnly || smoke || imagesOnly)) {
+            throw new IllegalArgumentException("tasks replaces researchOnly/smoke/imagesOnly; use one of them");
+        }
         // These modes explicitly request image capture, including with the generated noImages=true default.
-        noImages = researchOnly || flag(request, "noImages", true) && !imagesOnly;
+        // With tasks, images run exactly when itemicon is listed.
+        noImages = tasks.isEmpty() ? researchOnly || flag(request, "noImages", true) && !imagesOnly
+            : !tasks.contains("itemicon");
         if (!modFilter.isEmpty() && smoke) {
             throw new IllegalArgumentException(
                 "Mod filtering requires a data or imagesOnly export; smoke data has no per-entry mod ownership");

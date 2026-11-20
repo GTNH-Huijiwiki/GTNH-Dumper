@@ -190,6 +190,7 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 | `outputMode` | `"timestamp"` | 每次写入 `dumper-runs/<runId>/dumps/`；改为 `"latest"` 后重复写入 `dumper-runs/latest/dumps/` |
 | `noImages` | `true` | 跳过物品图标任务；改为 `false` 时导出图标及动画 |
 | `modFilter` | `""` | 全量导出；填入已加载 Mod 的 ID 或完整名称后按前述来源规则筛选 |
+| `tasks` | 无（全量） | 只运行列出的任务，如 `["gtnhdimension","tc4thaumonomicon"]`；见下方“只导出部分数据” |
 
 `latest` 在世界和 NEI 准备完成后更新本次范围的数据。旧配方目录会先清除，
 因此附属更新时删除的配方也会从结果中移除。全量与各 Mod 的结果分别保存；
@@ -233,6 +234,23 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 | `-Dgtnhdumper.maxAnimationMB=N` | `256` | 单个动画帧条的原始大小上限 |
 
 整合包实例建议最大内存设为 8 GB 或以上。
+
+### 只导出部分数据
+
+反复调试某一份数据时，用 `tasks` 只跑需要的任务，例如只看维度和魔导手册：
+
+```json
+{"enabled": true, "tasks": ["gtnhdimension", "tc4thaumonomicon"], "outputMode": "latest", "exitGame": true}
+```
+
+可用的任务名：`itemicon`、`advitempanel`、`recipes`、`oreDictionary`、`fluid`、`gtmaterial`、`gtnhdimension`、
+`ticmaterial`、`tc4thaumonomicon`、`betterquesting`（任务书源文件）。写错名字会在开始前报错并列出可用名字。
+
+- 图标只在列出 `itemicon` 时导出，此时不看 `noImages`。
+- 配方物品扫描（约 2～3 分钟）只在列出 `itemicon` 或 `advitempanel` 时运行，其他任务不需要它。
+- `latest` 模式下只清除所选任务的旧输出，同目录里其他数据保留，便于和工具链配合反复迭代。
+- 不能与 `researchOnly`、`smoke`、`imagesOnly` 同时使用（`tasks` 已覆盖它们的用途）。
+- `status.json` 的 `tasks` 记录本次选择。启动游戏和准备世界仍需约 2 分钟。
 
 ### 只更新一个附属
 
