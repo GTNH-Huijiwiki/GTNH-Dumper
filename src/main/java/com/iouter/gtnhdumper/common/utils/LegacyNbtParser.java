@@ -40,7 +40,8 @@ public final class LegacyNbtParser {
                 if (match.lookingAt()) {
                     String placeholder = prefix + keys.size();
                     keys.put(placeholder, match.group(1) + ":" + match.group(2));
-                    safe.append(placeholder).append(':');
+                    safe.append(placeholder)
+                        .append(':');
                     i = match.end() - 1;
                 }
             }

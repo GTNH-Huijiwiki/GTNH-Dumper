@@ -8,9 +8,11 @@ public final class RecipeNbtDependenciesRegression {
 
     public static void main(String[] args) throws Exception {
         RecipeNbtDependencies dependencies = new RecipeNbtDependencies();
-        dependencies.add(new JsonParser().parse("[{\"otherItems\":[[{\"key\":\"gregtech:gt.metaitem.01:32708\","
-            + "\"nbt\":\"{research:123L,display:{Name:\\\"Starcore\\\"}}\"}]],"
-            + "\"inputItems\":[\"minecraft:stone\"]}]"));
+        dependencies.add(
+            new JsonParser().parse(
+                "[{\"otherItems\":[[{\"key\":\"gregtech:gt.metaitem.01:32708\","
+                    + "\"nbt\":\"{research:123L,display:{Name:\\\"Starcore\\\"}}\"}]],"
+                    + "\"inputItems\":[\"minecraft:stone\"]}]"));
         NBTTagCompound tag = new NBTTagCompound();
         NBTTagCompound display = new NBTTagCompound();
         display.setString("Name", "Starcore");
@@ -22,7 +24,9 @@ public final class RecipeNbtDependenciesRegression {
         check(!dependencies.contains("gregtech:gt.metaitem.01:32708", tag), "Different research NBT is not a match");
         check(!dependencies.contains("minecraft:stone", null), "Ordinary cross-mod inputs remain in the base library");
         check(!new RecipeNbtDependencies().contains("gregtech:gt.metaitem.01:32708", tag), "Scopes are independent");
-        dependencies.add(new JsonParser().parse("{\"key\":\"test:wand:32767\",\"nbt\":\"{research:124L,display:{Name:\\\"Starcore\\\"}}\"}"));
+        dependencies.add(
+            new JsonParser()
+                .parse("{\"key\":\"test:wand:32767\",\"nbt\":\"{research:124L,display:{Name:\\\"Starcore\\\"}}\"}"));
         check(dependencies.contains("test:wand:7", tag), "NBT wildcard includes concrete metadata");
         check(dependencies.contains("test:wand", tag), "NBT wildcard includes zero metadata shorthand");
         tag.setLong("research", 125);
@@ -53,7 +57,8 @@ public final class RecipeNbtDependenciesRegression {
         child.setInteger("mod:nested:key", 3);
         children.appendTag(child);
         namespaced.setTag("children", children);
-        check(namespaced.equals(LegacyNbtParser.parse(namespaced.toString())),
+        check(
+            namespaced.equals(LegacyNbtParser.parse(namespaced.toString())),
             "Namespaced keys round-trip without changing strings or nested list order");
         System.out.println("Recipe NBT dependency regression passed");
     }

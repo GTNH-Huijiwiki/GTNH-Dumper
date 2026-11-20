@@ -9,7 +9,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.StatCollector;
 
 import com.iouter.gtnhdumper.common.recipe.base.BaseHandlerRecipe;
-import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
 import com.iouter.gtnhdumper.common.utils.Utils;
 
 import codechicken.nei.recipe.IRecipeHandler;
