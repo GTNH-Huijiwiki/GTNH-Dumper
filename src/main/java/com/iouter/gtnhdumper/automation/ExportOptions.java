@@ -36,7 +36,8 @@ final class ExportOptions {
             "betterquesting",
             "biomes",
             "achievements",
-            "entities"));
+            "entities",
+            "entityimages"));
 
     ExportOptions(JsonObject request) {
         outputMode = request.has("outputMode") ? request.get("outputMode")

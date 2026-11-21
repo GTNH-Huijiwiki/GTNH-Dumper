@@ -247,7 +247,7 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 ```
 
 可用的任务名：`itemicon`、`advitempanel`、`recipes`、`oreDictionary`、`fluid`、`gtmaterial`、`gtnhdimension`、
-`ticmaterial`、`tc4thaumonomicon`、`betterquesting`（任务书源文件）、`biomes`、`achievements`、`entities`。写错名字会在开始前报错并列出可用名字。
+`ticmaterial`、`tc4thaumonomicon`、`betterquesting`（任务书源文件）、`biomes`、`achievements`、`entities`、`entityimages`。写错名字会在开始前报错并列出可用名字。
 
 - 图标只在列出 `itemicon` 时导出，此时不看 `noImages`。
 - 配方物品扫描（约 2～3 分钟）只在列出 `itemicon` 或 `advitempanel` 时运行，其他任务不需要它。
@@ -377,7 +377,29 @@ Amazing Trophies 的方块结构奖杯默认用 VBO 绘制，模型在首次渲�
   （物品 key、数量、类型、几率（万分比）、抢夺、仅玩家击杀、随机附魔与耐久等）。
 - `poweredSpawner`（加载 Ender IO 时，仅生物）：电动刷怪笼黑名单 `blacklisted` 与耗能倍率 `costMultiplier`。
 
-暂不导出实体图片，也不区分同一注册名下的 NBT 变体（如凋灵骷髅）。按 Mod 导出时跳过。
+MobsInfo 另外登记、注册名不在 EntityList 中的变体（如凋灵骷髅 `witherSkeleton`）也导出为单独记录：
+`id` 为 `<注册名>#<NBT 字段>=<值>,…`（如 `Skeleton#SkeletonType=1`，与任务击杀要求的写法相同），
+NBT 取与新建同注册名实体不同的标量字段；另有 `variantOf`、`variantNbt`、`mobsInfoKey`，基础记录带 `variants` 列表。
+按 Mod 导出时跳过。
+
+### 实体图片
+
+`entityimages` 任务（全量导出且 `noImages: false`，或在 `tasks` 中列出）为每个生物写出两张图到 `entity-images/`：
+
+- `Entity <注册名>.png`：全身照，1024×1024，斜前方 3/4 俯视、物品栏光照，按 2048 渲染后缩小。
+- `EntityHead <注册名>.png`：像素头像，正面平视、无光照，只画模型的头部部件（每模型单位 4 像素，纹素对齐像素）。
+  认不出头部时画整个生物（`headSource: "body"`）。注册名中的 `#` 等文件名不能用的字符换成空格或下划线。
+
+姿势固定（身体、头、俯仰朝正前方，无摆动、受伤与死亡动画，时钟冻结）；实体在按类名固定随机种子的范围内新建，
+构造期间 `entityInit` 前后与每次渲染前都重设实体与世界的随机数，Special Mobs 的随机体型等每次相同。
+头像去掉手持物、身上的盔甲与渲染器另外画的东西（法杖、弓、箭袋），头盔的盔甲模型（如神秘时代邪教徒）算作头部。
+借用玩家皮肤的生物（暮色森林巨人）画成 Steve。多实体拼成的 Boss（暮色森林娜迦、九头蛇）把身体节或头与脖子按游戏逻辑摆好一起画。
+个别生物的视角与部件在 `EntityImages` 的特判表中指定。
+
+`entity-images.json`：`images`（每个实体的 `full`、`head`、`headSource`、`headView` 等）、`failures`、`skipped`
+（如盔甲架）、`pixelHashes`（每个文件的像素哈希，同 `icon-hashes.json`）与 `pngCacheHits`。
+PNG 与物品图标共用内容缓存（`.minecraft/dumper-cache/png/`），像素不变的图片只建硬链接。
+少数生物的渲染器自身取随机（蚊群、愤怒末影人的抖动、粒子），两次导出仍可能不同，由工具链的不稳定名单处理。
 
 ## 任务书源文件
 

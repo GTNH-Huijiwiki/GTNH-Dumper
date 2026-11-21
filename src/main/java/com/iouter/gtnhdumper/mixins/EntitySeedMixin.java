@@ -28,6 +28,15 @@ public abstract class EntitySeedMixin {
     @Shadow
     protected UUID entityUniqueID;
 
+    /**
+     * Also before {@code entityInit()}, which the constructor calls once {@code rand} exists: mods pick random looks
+     * there (Special Mobs' random render scale goes into the data watcher), before the RETURN seeding below.
+     */
+    @Inject(method = "<init>", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/Entity;entityInit()V"))
+    private void gtnhdumper$seedBeforeInit(World world, CallbackInfo callback) {
+        gtnhdumper$seed(world, callback);
+    }
+
     @Inject(method = "<init>", at = @At("RETURN"))
     private void gtnhdumper$seed(World world, CallbackInfo callback) {
         if (!EntitySeeds.active()) return;
