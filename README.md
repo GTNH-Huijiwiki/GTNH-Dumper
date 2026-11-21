@@ -385,7 +385,10 @@ GT 两种超立方体由客户端 RenderTick 同时按 50 ms 目标间隔采样 
 - `lang/`：整合包翻译放在 `config/txloader/forceload/betterquesting/lang/` 的各语言文件。
 - `itemKeys.json`：任务中每个物品堆栈在物品导出里的 key，`{任务ID: {icon, tasks: {序号: [key…]}, rewards: {序号: [key…]}}}`。
   任务 ID 与工具链相同（UUID 两半大端拼接后的 URL-safe Base64，无填充），序号是任务、奖励的 `index`，
-  列表与 `requiredItems`、`rewards`/`choices` 一一对应；带 NBT 的堆栈是短 key，空堆栈为 `null`。
+  列表与 `requiredItems`、`rewards`/`choices` 一一对应。key 取物品导出中物品、metadata 与 NBT 内容都相同的那一项
+  （NBT 的字符串形式随复制改变顺序，不能直接重算）；通配堆栈和没有导出的堆栈为 `null`。
+  另有 `taskMatches: {序号: [[key…]…]}`：每个任务要求的堆栈实际接受的全部已导出物品，用 BetterQuesting 的
+  `ItemComparison.StackMatch` 按任务的 `ignoreNBT` / `partialMatch` 判断，工具链据此给物品写任务关联。
 
 每次导出先清空该目录再复制；按 Mod 导出时跳过。
 
