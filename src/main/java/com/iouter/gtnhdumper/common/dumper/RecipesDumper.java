@@ -203,6 +203,12 @@ public class RecipesDumper extends FilteredDataDumper {
             }
         }
         com.iouter.gtnhdumper.common.utils.ScanTiming.add("fluidDisplay", null, System.nanoTime() - fluidStart);
+        // 任务奖励常带专门的 NBT（改名的工具、任务用纸），配方里看不到，单独补扫。
+        if (com.iouter.gtnhdumper.CommonProxy.isBQLoaded) {
+            long questStart = System.nanoTime();
+            com.iouter.gtnhdumper.common.utils.QuestItems.capture();
+            com.iouter.gtnhdumper.common.utils.ScanTiming.add("questItems", null, System.nanoTime() - questStart);
+        }
         for (IRecipeHandler handler : GuiUsageRecipe.usagehandlers) {
             // NEI initializes lazy caches (including furnace fuels) when creating a query instance.
             String timingName = handler.getClass()

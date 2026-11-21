@@ -101,9 +101,6 @@ public final class BiomeExport {
                 Map<String, Object> spawn = new LinkedHashMap<>();
                 Object name = EntityList.classToStringMapping.get(entry.entityClass);
                 spawn.put("entity", name != null ? name : entry.entityClass.getName());
-                String key = "entity." + name + ".name";
-                if (name != null && net.minecraft.util.StatCollector.canTranslate(key))
-                    spawn.put("entityName", net.minecraft.util.StatCollector.translateToLocal(key));
                 spawn.put("weight", entry.itemWeight);
                 spawn.put("min", entry.minGroupCount);
                 spawn.put("max", entry.maxGroupCount);

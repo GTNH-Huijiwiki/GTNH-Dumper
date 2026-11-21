@@ -630,11 +630,11 @@ public final class ExportSession {
         if (CommonProxy.isTCLoaded) addThaumcraft();
         if (CommonProxy.isBQLoaded) {
             if (filter.isActive()) skipped.put("betterquesting", "The quest book belongs to the whole pack");
-            else tasks.add(
-                new ExportTask(
-                    "betterquesting",
-                    () -> com.iouter.gtnhdumper.common.utils.BetterQuestingFiles
-                        .copy(Minecraft.getMinecraft().mcDataDir, output)));
+            else tasks.add(new ExportTask("betterquesting", () -> {
+                com.iouter.gtnhdumper.common.utils.BetterQuestingFiles.copy(Minecraft.getMinecraft().mcDataDir, output);
+                com.iouter.gtnhdumper.common.utils.QuestItems
+                    .writeKeys(new File(output, "betterquesting/itemKeys.json"));
+            }));
         }
         if (filter.isActive()) skipped.put("biomes", "Biomes belong to the whole pack");
         else tasks.add(
@@ -647,6 +647,11 @@ public final class ExportSession {
                 "achievements",
                 () -> com.iouter.gtnhdumper.common.utils.AchievementExport
                     .write(new File(output, "achievements.json"))));
+        if (filter.isActive()) skipped.put("entities", "Entities belong to the whole pack");
+        else tasks.add(
+            new ExportTask(
+                "entities",
+                () -> com.iouter.gtnhdumper.common.utils.EntityExport.write(new File(output, "entities.json"))));
         if (!options.tasks.isEmpty()) keepSelectedTasks();
     }
 
