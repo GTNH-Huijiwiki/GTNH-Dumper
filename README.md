@@ -65,7 +65,7 @@ NEI Custom Diagram 的“世界生成战利品”图表导出为配方，文件�
   即 `权重 ÷ 总权重 × 10000`。`amount` 是堆叠数量上限，数量范围写在物品的 `tooltip`（“数量：1～3”）。
 - 配方字段：`structure`（英文键，Roguelike/暮色森林表没有键，沿用图表生成的标题）、
   `structureName`（图表有本地化名时才有，缺失时省略，不拿键名冒充）、`lootSource`（`forge`/`roguelike`/`twilightforest`）、
-  `rollsMin`/`rollsMax`（每个箱子的抽取次数，仅 Forge 表）、`totalWeight`（总权重）。
+  `rollsMin`/`rollsMax`（每个箱子的抽取次数，两端都可取到，仅 Forge 表；Forge 的 `getCount` 不含上限，已换算）、`totalWeight`（总权重）。
 - 每个箱子抽取 `rollsMin`～`rollsMax` 次，每次按权重抽一个条目；同一物品可以出现在多个条目中，各自保留。
 - 物品经 `RecipeItem` 构造，因此和其他配方一样会被物品变体扫描收集。
 - 战利品表以游戏当前状态为准：TooMuchLoot 在服务器启动时才应用自定义表，导出时机决定看到的是原版表还是自定义表。

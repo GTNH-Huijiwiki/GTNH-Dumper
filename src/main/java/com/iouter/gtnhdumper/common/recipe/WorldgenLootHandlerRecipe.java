@@ -25,7 +25,7 @@ import cpw.mods.fml.common.Loader;
  * <p>
  * 数据与该图表相同：Forge 的 {@link ChestGenHooks} 注册表（TooMuchLoot 改写的就是它），
  * 再加上图表自带的 Roguelike Dungeons、暮色森林补充表。输出物品的 {@code chance} 是每次抽取命中该条目的概率，
- * 单位与其他配方一致（10000 表示 100%）；每个箱子抽取 {@code rollsMin}～{@code rollsMax} 次，每次按权重抽一个条目，
+ * 单位与其他配方一致（10000 表示 100%）；每个箱子抽取 {@code rollsMin}～{@code rollsMax} 次（两端都可取到），每次按权重抽一个条目，
  * 堆叠数量在该条目提示的数量范围内均匀取值（上限即输出的 {@code amount}）。
  * 结构名保存为 {@code structure}（英文键），有本地化名时另存 {@code structureName}。
  */
@@ -132,7 +132,8 @@ public class WorldgenLootHandlerRecipe extends BaseHandlerRecipe {
                 key,
                 StatCollector.canTranslate(langKey) ? StatCollector.translateToLocal(langKey) : null,
                 hooks.getMin(),
-                hooks.getMax(),
+                // Forge 的 getCount 为 min + nextInt(max - min)，上限不含；换算成包含上限的真实最大次数。
+                hooks.getMin() < hooks.getMax() ? hooks.getMax() - 1 : hooks.getMin(),
                 "forge");
             for (WeightedRandomChestContent content : contents) {
                 if (content.theItemId == null || content.theItemId.getItem() == null) continue;
