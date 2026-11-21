@@ -54,6 +54,23 @@ NEI 中的虚拟地点不一定有独立的实际维度。
 
 本项仍不支持按 Mod 筛选。运行 `gradlew checkDimensionExport` 可检查维度匹配、未初始化字段、异常隔离和星系结构。
 
+## 世界生成战利品
+
+NEI Custom Diagram 的“世界生成战利品”图表导出为配方，文件为 `recipes/neicustomdiagram/worldgenloot_null.json`，
+与其他配方并列。每个箱子战利品表是一条配方，没有输入，`outputItems` 是表中的全部物品。
+
+- 数据与图表一致：Forge `ChestGenHooks` 注册表（TooMuchLoot 改写的就是它），加上图表自带的
+  Roguelike Dungeons、暮色森林补充表（对应模组已加载时才有）。按英文键排序，条目顺序与注册顺序一致。
+- 输出物品的 `chance` 是**单次抽取**命中该条目的概率，单位与其他配方相同（10000 为 100%），
+  即 `权重 ÷ 总权重 × 10000`。`amount` 是堆叠数量上限，数量范围写在物品的 `tooltip`（“数量：1～3”）。
+- 配方字段：`structure`（英文键，Roguelike/暮色森林表没有键，沿用图表生成的标题）、
+  `structureName`（图表有本地化名时才有，缺失时省略，不拿键名冒充）、`lootSource`（`forge`/`roguelike`/`twilightforest`）、
+  `rollsMin`/`rollsMax`（每个箱子的抽取次数，仅 Forge 表）、`totalWeight`（总权重）。
+- 每个箱子抽取 `rollsMin`～`rollsMax` 次，每次按权重抽一个条目；同一物品可以出现在多个条目中，各自保留。
+- 物品经 `RecipeItem` 构造，因此和其他配方一样会被物品变体扫描收集。
+- 战利品表以游戏当前状态为准：TooMuchLoot 在服务器启动时才应用自定义表，导出时机决定看到的是原版表还是自定义表。
+- 按 Mod 筛选时，战利品表只要有一个物品属于所选 Mod 就导出。
+
 ## 板材切割机数据
 
 板材切割机从真实的 `cutterRecipes` 配方池读取数据，按物品输入、输出和原始

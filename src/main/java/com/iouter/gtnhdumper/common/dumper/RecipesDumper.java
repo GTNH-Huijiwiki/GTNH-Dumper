@@ -141,6 +141,9 @@ public class RecipesDumper extends FilteredDataDumper {
                 return new MobHandlerInfernalRecipe((MobHandlerInfernal) recipeHandler);
             }
         }
+        if (com.iouter.gtnhdumper.common.recipe.WorldgenLootHandlerRecipe.supports(recipeHandler)) {
+            return new com.iouter.gtnhdumper.common.recipe.WorldgenLootHandlerRecipe(recipeHandler);
+        }
         if (CommonProxy.isWitcheryLoaded && recipeHandler instanceof NEICauldronRecipeHandler) {
             return new WitcheryCauldronHandlerRecipe(recipeHandler);
         }
