@@ -158,6 +158,9 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 切换 Mod 筛选会重建配方依赖范围，避免沿用另一个附属的变体；未命中配方的跨 Mod 变体不会因此加入。
 运行 `gradlew checkRecipeNbtDependencies checkRecipeItemVariants` 可验证精确 NBT 匹配与变体扫描。
 
+加载了 BetterQuesting 时，扫描还会遍历任务书：任务图标、物品类任务的要求物品、物品奖励与可选奖励。
+任务奖励常带专门的 NBT（改名的工具、任务用纸），配方里看不到，靠这一步进入物品与图标导出。
+
 日志包含扫描汇总和失败项，便于检查当前整合包中各处理器提供的物品记录。
 
 ## 一次性自动进档导出
@@ -244,7 +247,7 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 ```
 
 可用的任务名：`itemicon`、`advitempanel`、`recipes`、`oreDictionary`、`fluid`、`gtmaterial`、`gtnhdimension`、
-`ticmaterial`、`tc4thaumonomicon`、`betterquesting`（任务书源文件）、`biomes`、`achievements`。写错名字会在开始前报错并列出可用名字。
+`ticmaterial`、`tc4thaumonomicon`、`betterquesting`（任务书源文件）、`biomes`、`achievements`、`entities`。写错名字会在开始前报错并列出可用名字。
 
 - 图标只在列出 `itemicon` 时导出，此时不看 `noImages`。
 - 配方物品扫描（约 2～3 分钟）只在列出 `itemicon` 或 `advitempanel` 时运行，其他任务不需要它。
@@ -332,7 +335,7 @@ GT 两种超立方体由客户端 RenderTick 同时按 50 ms 目标间隔采样 
 
 - `biomes`：每个已注册群系一条，含 ID、英文名、类名、温度、降水、`highHumidity`、`enableSnow`、`enableRain`、`lightning`、
   `rootHeight`、`heightVariation`、颜色、地表与填充方块、BiomeDictionary 标签、林业气候（`forestryTemperature`/`forestryHumidity`）、
-  IC2 作物加成（`ic2CropBonus`，有 IC2 作物 API 时）、按生物类别的刷怪表（实体注册名 `entity` 与游戏内名称 `entityName`、权重、群组大小），以及在生态之书扩展版中的页码 `bookPages`。
+  IC2 作物加成（`ic2CropBonus`，有 IC2 作物 API 时）、按生物类别的刷怪表（实体注册名 `entity`、权重、群组大小；实体名称到 `entities.json` 中按注册名查），以及在生态之书扩展版中的页码 `bookPages`。
 - 装了巫术时另有两本书，取自游戏里构造的书本界面（不显示），与翻开看到的一致，当前语言与英文各一份：
   - `bookOfBiomes`（`witchery:ingredient:106`，生态之书）：季节变迁仪式指南，每类群系一页，含核心物品和群系列表。
   - `bookOfBiomesExtended`（`witchery:bookbiomes2`，扩展版）：分节（BiomeDictionary 类型）与每页的群系、降雨、温度、降雪、打雷四行。
@@ -353,6 +356,26 @@ GT 两种超立方体由客户端 RenderTick 同时按 50 ms 目标间隔采样 
 
 按 Mod 导出时跳过（成就属于整个整合包）。
 
+## 实体
+
+全量自动导出（及 `tasks` 中的 `entities`）写出 `entities.json`：`{"entities": [...]}`，包含 `EntityList` 中注册的
+全部实体（含投射物等非生物），按注册名排序。每条记录：
+
+- `id`：EntityList 注册名，与刷怪表、刷怪笼、任务击杀要求使用的名字相同，是其他数据引用实体的键。
+- `name`/`nameEnglish`：语言文件中 `entity.<id>.name` 的当前语言与英文译名，没有该键时不写。
+- `class`、`mod`/`modName`/`modEntityId`（Forge 注册）、`trackingRange`/`updateFrequency`、原版全局 ID `globalId`、
+  刷怪蛋颜色 `spawnEgg`。
+- `categories`：按类层次判断的类别（`boss`、`hostile`、`animal`、`water`、`ambient`、`tameable`、`npc`、`flying`、
+  `ranged`、`ageable`、`nonLiving` 等）；`creatureTypes`：可归入的刷怪类别（`monster`、`creature` 等）。
+- 生物另有：`width`/`height`、`fireImmune`、基础属性 `health`、`attackDamage`、`movementSpeed`、`followRange`、
+  `knockbackResistance`，`armor`、`experience`、`undead`、`creatureAttribute`。实体只构造、不加入世界。
+- `mobsInfo`（加载 MobsInfo 时）：`health`、精英怪 `infernal`（`always`/`allowed`/`never`）、能否装入灵魂瓶 `soulVial`、
+  和平难度可否生成 `peaceful`、生成群系 ID `spawnBiomes` 与其他来源 `spawnOther`（结构、事件），掉落 `drops`
+  （物品 key、数量、类型、几率（万分比）、抢夺、仅玩家击杀、随机附魔与耐久等）。
+- `poweredSpawner`（加载 Ender IO 时，仅生物）：电动刷怪笼黑名单 `blacklisted` 与耗能倍率 `costMultiplier`。
+
+暂不导出实体图片，也不区分同一注册名下的 NBT 变体（如凋灵骷髅）。按 Mod 导出时跳过。
+
 ## 任务书源文件
 
 全量自动导出时，如果加载了 BetterQuesting，会把任务书源文件复制到 `dumps/betterquesting/`，
@@ -360,6 +383,12 @@ GT 两种超立方体由客户端 RenderTick 同时按 50 ms 目标间隔采样 
 
 - `DefaultQuests/`：`config/betterquesting/DefaultQuests/` 原样复制（任务、任务线、`QuestLinesOrder.txt`）。
 - `lang/`：整合包翻译放在 `config/txloader/forceload/betterquesting/lang/` 的各语言文件。
+- `itemKeys.json`：任务中每个物品堆栈在物品导出里的 key，`{任务ID: {icon, tasks: {序号: [key…]}, rewards: {序号: [key…]}}}`。
+  任务 ID 与工具链相同（UUID 两半大端拼接后的 URL-safe Base64，无填充），序号是任务、奖励的 `index`，
+  列表与 `requiredItems`、`rewards`/`choices` 一一对应。key 取物品导出中物品、metadata 与 NBT 内容都相同的那一项
+  （NBT 的字符串形式随复制改变顺序，不能直接重算）；通配堆栈和没有导出的堆栈为 `null`。
+  另有 `taskMatches: {序号: [[key…]…]}`：每个任务要求的堆栈实际接受的全部已导出物品，用 BetterQuesting 的
+  `ItemComparison.StackMatch` 按任务的 `ignoreNBT` / `partialMatch` 判断，工具链据此给物品写任务关联。
 
 每次导出先清空该目录再复制；按 Mod 导出时跳过。
 
