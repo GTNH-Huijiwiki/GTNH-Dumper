@@ -34,7 +34,8 @@ final class ExportOptions {
             "ticmaterial",
             "tc4thaumonomicon",
             "betterquesting",
-            "biomes"));
+            "biomes",
+            "achievements"));
 
     ExportOptions(JsonObject request) {
         outputMode = request.has("outputMode") ? request.get("outputMode")

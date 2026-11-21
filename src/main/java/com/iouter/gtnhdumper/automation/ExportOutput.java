@@ -17,7 +17,7 @@ final class ExportOutput {
 
     private static final String[] DATA_FILES = { "advitempanel.json", "oreDictionary.json", "fluid.json",
         "gtmaterial.json", "gtnhdimension.json", "ticmaterial.json", "tc4thaumonomicon.json",
-        "recipes_filter_report.json", "biomes.json" };
+        "recipes_filter_report.json", "biomes.json", "achievements.json" };
 
     /** Outputs of removed exporters; a full refresh deletes them so stale copies cannot be mistaken for data. */
     private static final String[] REMOVED_FILES = { "gtorevein.json", "gtsmallorevein.json", "gtundergroundfluid.json",

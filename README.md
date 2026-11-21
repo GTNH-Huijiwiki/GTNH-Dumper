@@ -244,7 +244,7 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 ```
 
 可用的任务名：`itemicon`、`advitempanel`、`recipes`、`oreDictionary`、`fluid`、`gtmaterial`、`gtnhdimension`、
-`ticmaterial`、`tc4thaumonomicon`、`betterquesting`（任务书源文件）。写错名字会在开始前报错并列出可用名字。
+`ticmaterial`、`tc4thaumonomicon`、`betterquesting`（任务书源文件）、`biomes`、`achievements`。写错名字会在开始前报错并列出可用名字。
 
 - 图标只在列出 `itemicon` 时导出，此时不看 `noImages`。
 - 配方物品扫描（约 2～3 分钟）只在列出 `itemicon` 或 `advitempanel` 时运行，其他任务不需要它。
@@ -332,12 +332,26 @@ GT 两种超立方体由客户端 RenderTick 同时按 50 ms 目标间隔采样 
 
 - `biomes`：每个已注册群系一条，含 ID、英文名、类名、温度、降水、`highHumidity`、`enableSnow`、`enableRain`、`lightning`、
   `rootHeight`、`heightVariation`、颜色、地表与填充方块、BiomeDictionary 标签、林业气候（`forestryTemperature`/`forestryHumidity`）、
-  IC2 作物加成（`ic2CropBonus`，有 IC2 作物 API 时）、按生物类别的刷怪表（实体名、权重、群组大小），以及在生态之书扩展版中的页码 `bookPages`。
+  IC2 作物加成（`ic2CropBonus`，有 IC2 作物 API 时）、按生物类别的刷怪表（实体注册名 `entity` 与游戏内名称 `entityName`、权重、群组大小），以及在生态之书扩展版中的页码 `bookPages`。
 - 装了巫术时另有两本书，取自游戏里构造的书本界面（不显示），与翻开看到的一致，当前语言与英文各一份：
   - `bookOfBiomes`（`witchery:ingredient:106`，生态之书）：季节变迁仪式指南，每类群系一页，含核心物品和群系列表。
   - `bookOfBiomesExtended`（`witchery:bookbiomes2`，扩展版）：分节（BiomeDictionary 类型）与每页的群系、降雨、温度、降雪、打雷四行。
 
 按 Mod 导出时跳过（群系属于整个整合包）。
+
+## 成就与奖杯
+
+全量自动导出（及 `tasks` 中的 `achievements`）写出 `achievements.json`：
+
+- `pages`：成就界面翻页的顺序，原版页 `Minecraft` 在前，其后是 Forge 成就页名。
+- `achievements`：`AchievementList` 中的每个成就，含统计 ID `id`、当前语言与英文的名称和描述、所在页 `page`、
+  坐标 `x`/`y`、前置 `parent`、`special`，以及图标 `icon`（与物品导出相同的 key，带 NBT 的物品用短 key）。
+  Amazing Trophies 在 `config/amazingtrophies/achievements` 中定义的成就另有 `source: "amazingtrophies"`
+  和原样复制的条件 `condition`（模组解析后不保留这份定义，只能读配置）。
+- `trophies`：Amazing Trophies 注册的奖杯，含 `id`、中英文名、奖杯方块物品的 key `item`，
+  以及 `config/amazingtrophies/trophies` 中的条件 `condition` 与模型 `model`。
+
+按 Mod 导出时跳过（成就属于整个整合包）。
 
 ## 任务书源文件
 

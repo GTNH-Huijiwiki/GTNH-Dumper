@@ -40,8 +40,10 @@ public final class BiomeExport {
         Map<String, Object> root = new LinkedHashMap<>();
         Map<String, Object> books = Loader.isModLoaded("witchery") ? WitcheryBiomeBooks.export(bookPages) : null;
         List<Map<String, Object>> biomes = new ArrayList<>();
+        java.util.Set<Integer> seen = new java.util.HashSet<>();
         for (BiomeGenBase biome : BiomeGenBase.getBiomeGenArray()) {
-            if (biome != null) biomes.add(describe(biome, bookPages.get(biome.biomeID)));
+            // Some mods register one biome object in several slots; export each biome id once.
+            if (biome != null && seen.add(biome.biomeID)) biomes.add(describe(biome, bookPages.get(biome.biomeID)));
         }
         root.put("biomes", biomes);
         if (books != null) root.putAll(books);
@@ -99,6 +101,9 @@ public final class BiomeExport {
                 Map<String, Object> spawn = new LinkedHashMap<>();
                 Object name = EntityList.classToStringMapping.get(entry.entityClass);
                 spawn.put("entity", name != null ? name : entry.entityClass.getName());
+                String key = "entity." + name + ".name";
+                if (name != null && net.minecraft.util.StatCollector.canTranslate(key))
+                    spawn.put("entityName", net.minecraft.util.StatCollector.translateToLocal(key));
                 spawn.put("weight", entry.itemWeight);
                 spawn.put("min", entry.minGroupCount);
                 spawn.put("max", entry.maxGroupCount);
