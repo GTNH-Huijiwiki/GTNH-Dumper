@@ -321,6 +321,7 @@ public class ItemIconDumper extends WikiDumper {
     }
 
     private Iterable<Object[]> dumpIcons(int mode) {
+        com.iouter.gtnhdumper.common.utils.TrophyRenderCompat.useImmediateRenderer();
         LinkedList<Object[]> list = new LinkedList<>();
         frameCountMap.clear();
         dynamicSizeMap.clear();
