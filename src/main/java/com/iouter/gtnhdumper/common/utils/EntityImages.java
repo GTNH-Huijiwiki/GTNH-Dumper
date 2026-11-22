@@ -252,7 +252,9 @@ public final class EntityImages {
                     if (row.containsKey("full") || row.containsKey("head")) images.put(id, row);
                     else failures.put(id, "nothing drawn");
                 } catch (Throwable e) {
-                    LOG.error("Entity image failed: " + id, e);
+                    // One mod's renderer failing is recorded in "failures" (as the item icons record theirs in
+                    // renderFailures); an ERROR here would mark the whole export task failed.
+                    LOG.warn("Entity image failed: " + id, e);
                     failures.put(id, e.toString());
                 }
             }
@@ -695,6 +697,11 @@ public final class EntityImages {
     static {
         // A plain stand of sticks, and its name is the armour stand item's: no page of its own as a creature.
         SKIP.put("etfuturum.wooden_armorstand", "armour stand: not a creature, same name as the item");
+        // Abstract base classes registered in EntityList: no instance can be made.
+        SKIP.put("Mob", "abstract base class, no instance");
+        SKIP.put("Monster", "abstract base class, no instance");
+        // A player stand-in used by mods' automation, not a mob; its renderer throws without a real player.
+        SKIP.put("FakePlayerEntity", "fake player, not a creature");
     }
 
     /**
