@@ -39,3 +39,6 @@ addon.late.local.gradle.kts
 layout.json
 *.log
 /.gtnh-workflows/
+
+# scripts/export.ps1 的本地配置
+/.env

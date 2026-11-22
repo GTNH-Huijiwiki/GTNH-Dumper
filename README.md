@@ -183,6 +183,33 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 
 日志包含扫描汇总和失败项，便于检查当前整合包中各处理器提供的物品记录。
 
+## 用脚本在 Prism 实例里导出（Windows）
+
+`scripts/export.ps1` 把 Dumper 放进 Prism 里的 GTNH 实例，启动游戏、等导出完成并汇报结果，不用手动改配置。
+
+1. 复制 `.env.example` 为 `.env`，至少设置 `PRISM_INSTANCE`（Prism 的 `instances` 目录下的实例文件夹名）。其余项有默认值，见文件里的注释。
+2. 构建 jar：`.\gradlew build`，或给脚本加 `-Build`。
+3. 运行：
+
+```powershell
+.\scripts\export.ps1                         # 全量导出：先删除 dumper-runs\latest，再重新导出
+.\scripts\export.ps1 entities entityimages   # 只导出这两个任务，其余数据保留
+.\scripts\export.ps1 -List                   # 列出任务名
+.\scripts\export.ps1 -Clean                  # 删除 latest 以外的旧导出和 Dumper-* 存档
+```
+
+其他开关：`-Build`、`-NoImages`（全量时跳过物品图标）、`-DryRun`（只显示会做什么）、`-Jar <路径>`。
+同一时间只能有一个游戏在跑，游戏已在运行时脚本会直接报错。
+
+数据固定写入 `<游戏目录>\dumper-runs\latest\dumps`，工具链的 `DUMPS_DIR` 指向这里即可。全量导出会先删掉整个 `latest`，
+指定任务时只替换这些任务的输出（`latest` 模式，见下文）。图片走 `dumper-cache\png` 的内容缓存，重复导出只重新写变了的图，
+所以每次全量导出的磁盘占用基本只有一份；`-Clean` 清掉历史导出，不动缓存。
+
+**替换 Dumper 的做法**（想手动做时同样适用）：关闭游戏，删掉实例 `mods` 里旧的 `gtnhdumper*.jar`，把
+`build\libs\gtnhdumper-<版本>.jar` 复制进去。只用正式 jar，不要 `-dev`、`-sources`、`-preshadow`、`-predowngrade`。
+脚本把它复制成 `mods\gtnhdumper.jar`，旧 jar 备份到游戏目录的 `dumper-backup`（只留最近一个），jar 没变时不复制。
+不指定固定 `runId` 而用 `latest` 模式，是因为用过的 `runId` 目录会被拒绝，游戏会停在主菜单。
+
 ## 一次性自动进档导出
 
 首次启动会在游戏目录生成 `config/gtnhdumper-autorun.json`，默认 `enabled: false`。
