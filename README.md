@@ -62,12 +62,15 @@ NEI Custom Diagram 的“世界生成战利品”图表导出为配方，文件�
 - 数据与图表一致：Forge `ChestGenHooks` 注册表（TooMuchLoot 改写的就是它），加上图表自带的
   Roguelike Dungeons、暮色森林补充表（对应模组已加载时才有）。按英文键排序，条目顺序与注册顺序一致。
 - 输出物品的 `chance` 是**单次抽取**命中该条目的概率，单位与其他配方相同（10000 为 100%），
-  即 `权重 ÷ 总权重 × 10000`。`amount` 是堆叠数量上限，数量范围写在物品的 `tooltip`（“数量：1～3”）。
+  即 `权重 ÷ 总权重 × 10000`。`amount` 是堆叠数量上限，数量有范围时写在物品的 `tooltip`（“数量：1～3”）。
 - 配方字段：`structure`（英文键，Roguelike/暮色森林表没有键，沿用图表生成的标题）、
   `structureName`（图表有本地化名时才有，缺失时省略，不拿键名冒充）、`lootSource`（`forge`/`roguelike`/`twilightforest`）、
   `rollsMin`/`rollsMax`（每个箱子的抽取次数，两端都可取到，仅 Forge 表；Forge 的 `getCount` 不含上限，已换算）、`totalWeight`（总权重）。
 - 每个箱子抽取 `rollsMin`～`rollsMax` 次，每次按权重抽一个条目；同一物品可以出现在多个条目中，各自保留。
 - 物品经 `RecipeItem` 构造，因此和其他配方一样会被物品变体扫描收集。
+- 读取的是注册表里的原始条目，不用 `ChestGenHooks.getItems(Random)`：后者对附魔书等条目每次返回新的随机物品，
+  导出会每次不同，也对不上物品库。游戏每次生成都会换新物品的条目（`getChestGenBase` 返回新对象）导出为不带随机属性的
+  模板物品，`tooltip` 注明“每次生成时随机”。
 - 战利品表以游戏当前状态为准：TooMuchLoot 在服务器启动时才应用自定义表，导出时机决定看到的是原版表还是自定义表。
 - 按 Mod 筛选时，战利品表只要有一个物品属于所选 Mod 就导出。
 
