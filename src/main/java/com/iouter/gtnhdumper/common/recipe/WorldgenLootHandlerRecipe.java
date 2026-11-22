@@ -72,12 +72,19 @@ public class WorldgenLootHandlerRecipe extends BaseHandlerRecipe {
         final int min;
         final int max;
         final int weight;
+        /** 游戏每次生成都会换成新物品（如附魔书），导出的是不带随机属性的模板。 */
+        final boolean randomized;
 
         Entry(ItemStack stack, int min, int max, int weight) {
+            this(stack, min, max, weight, false);
+        }
+
+        Entry(ItemStack stack, int min, int max, int weight, boolean randomized) {
             this.stack = stack;
             this.min = min;
             this.max = max;
             this.weight = weight;
+            this.randomized = randomized;
         }
     }
 
@@ -113,10 +120,13 @@ public class WorldgenLootHandlerRecipe extends BaseHandlerRecipe {
     @SuppressWarnings("unchecked")
     private static List<Table> forgeTables() {
         Map<String, ChestGenHooks> registry;
+        Field contentsField;
         try {
             Field field = ChestGenHooks.class.getDeclaredField("chestInfo");
             field.setAccessible(true);
             registry = (Map<String, ChestGenHooks>) field.get(null);
+            contentsField = ChestGenHooks.class.getDeclaredField("contents");
+            contentsField.setAccessible(true);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Cannot read Forge chest loot registry", e);
         }
@@ -124,7 +134,12 @@ public class WorldgenLootHandlerRecipe extends BaseHandlerRecipe {
         List<Table> tables = new ArrayList<>();
         for (Map.Entry<String, ChestGenHooks> registered : new TreeMap<>(registry).entrySet()) {
             ChestGenHooks hooks = registered.getValue();
-            WeightedRandomChestContent[] contents = hooks.getItems(new Random());
+            List<WeightedRandomChestContent> contents;
+            try {
+                contents = (List<WeightedRandomChestContent>) contentsField.get(hooks);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException("Cannot read loot table " + registered.getKey(), e);
+            }
             if (contents == null) continue;
             String key = registered.getKey();
             String langKey = LANG_PREFIX + key;
@@ -135,14 +150,22 @@ public class WorldgenLootHandlerRecipe extends BaseHandlerRecipe {
                 // Forge 的 getCount 为 min + nextInt(max - min)，上限不含；换算成包含上限的真实最大次数。
                 hooks.getMin() < hooks.getMax() ? hooks.getMax() - 1 : hooks.getMin(),
                 "forge");
-            for (WeightedRandomChestContent content : contents) {
-                if (content.theItemId == null || content.theItemId.getItem() == null) continue;
+            // 不用 ChestGenHooks.getItems(Random)：附魔书等条目会在其中每次换成新的随机物品，
+            // 导出的物品每次都不同，也对不上物品库。这里读注册的原始条目，只用 getChestGenBase 判断是否随机。
+            Random random = new Random(0);
+            for (WeightedRandomChestContent orig : contents) {
+                if (orig.theItemId == null || orig.theItemId.getItem() == null) continue;
+                WeightedRandomChestContent generated = orig.theItemId.getItem()
+                    .getChestGenBase(hooks, random, orig);
+                if (generated == null) continue;
+                boolean randomized = generated != orig;
                 table.entries.add(
                     new Entry(
-                        content.theItemId,
-                        content.theMinimumChanceToGenerateItem,
-                        content.theMaximumChanceToGenerateItem,
-                        content.itemWeight));
+                        randomized ? orig.theItemId : generated.theItemId,
+                        generated.theMinimumChanceToGenerateItem,
+                        generated.theMaximumChanceToGenerateItem,
+                        generated.itemWeight,
+                        randomized));
             }
             tables.add(table);
         }
@@ -192,9 +215,9 @@ public class WorldgenLootHandlerRecipe extends BaseHandlerRecipe {
                 // 每次抽取命中该条目的概率；10000 = 100%。
                 item.chance = Math.round(entry.weight * 10000d / totalWeight * 1e6) / 1e6;
             }
-            item.withTooltip(entry.min == entry.max ? "数量：" + entry.max : "数量：" + entry.min + "～" + entry.max);
+            if (entry.min != entry.max) item.withTooltip("数量：" + entry.min + "～" + entry.max);
+            if (entry.randomized) item.withTooltip("附魔等属性每次生成时随机，展示物品不代表固定结果。");
             outputs.add(item);
-
         }
         Map<String, Object> recipe = new LinkedHashMap<>();
         recipe.put("outputItems", outputs);
