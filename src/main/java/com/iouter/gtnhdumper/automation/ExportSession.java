@@ -652,6 +652,12 @@ public final class ExportSession {
             new ExportTask(
                 "entities",
                 () -> com.iouter.gtnhdumper.common.utils.EntityExport.write(new File(output, "entities.json"))));
+        // Entity images only with images enabled, or when listed in tasks.
+        if (filter.isActive()) skipped.put("entityimages", "Entities belong to the whole pack");
+        else if (options.noImages && !options.tasks.contains("entityimages"))
+            skipped.put("entityimages", "noImages: entity images are not rendered");
+        else tasks
+            .add(new ExportTask("entityimages", () -> com.iouter.gtnhdumper.common.utils.EntityImages.write(output)));
         if (!options.tasks.isEmpty()) keepSelectedTasks();
     }
 
