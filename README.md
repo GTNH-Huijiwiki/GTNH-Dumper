@@ -194,6 +194,7 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 ```powershell
 .\scripts\export.ps1                         # 全量导出：先删除 dumper-runs\latest，再重新导出
 .\scripts\export.ps1 entities entityimages   # 只导出这两个任务，其余数据保留
+.\scripts\export.ps1 entityimages -Entities 'Thaumcraft.TaintSpore,Thaumcraft.TaintSwarm'   # 只重画这两个实体的图片，其余图片和记录保留
 .\scripts\export.ps1 -List                   # 列出任务名
 .\scripts\export.ps1 -Clean                  # 删除 latest 以外的旧导出和 Dumper-* 存档
 ```
