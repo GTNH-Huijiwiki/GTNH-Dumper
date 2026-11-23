@@ -119,13 +119,30 @@ public final class EECRecipeDumper {
         }
 
         JsonObject result = new JsonObject();
-        result.addProperty("name", RECIPE_NAME);
+        result.addProperty("name", localizedName());
         result.add("catalysts", new JsonArray());
         result.addProperty("identifier", "kubatech.eec");
         result.addProperty("source", "kubatech.loaders.MobHandlerLoader.recipeMap");
         result.addProperty("markedItem", "null");
         result.add("recipes", GTNHDumper.GSON.toJsonTree(recipes));
         return result;
+    }
+
+    /** The recipe has no NEI tab, so use the localized name of the machine that runs it. */
+    private static String localizedName() {
+        try {
+            Class<?> itemList = Class.forName("kubatech.api.enums.ItemList");
+            Object machine = Enum.valueOf((Class<Enum>) itemList.asSubclass(Enum.class), "ExtremeEntityCrusher");
+            ItemStack stack = (ItemStack) itemList.getMethod("get", long.class, Object[].class)
+                .invoke(machine, 1L, new Object[0]);
+            if (stack != null) {
+                String name = stack.getDisplayName();
+                if (name != null && !name.isEmpty()) return name;
+            }
+        } catch (Exception | LinkageError e) {
+            GTNHDumper.LOG.warn("Could not read the localized Extreme Entity Crusher name", e);
+        }
+        return RECIPE_NAME;
     }
 
     private static ItemStack getPoweredSpawner(String entityName) {
