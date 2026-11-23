@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -141,8 +142,18 @@ public final class EntityImages {
     }
 
     public static void write(File output) throws Exception {
+        write(output, Collections.emptySet());
+    }
+
+    /**
+     * Renders the entity images. With a non-empty {@code only} just those ids are rendered again: the other files
+     * and the other entries of entity-images.json stay as they are, so a few broken images can be redone without a
+     * full export.
+     */
+    public static void write(File output, Set<String> only) throws Exception {
         File directory = new File(output, "entity-images");
-        if (directory.isDirectory()) for (File old : directory.listFiles()) Files.delete(old.toPath());
+        boolean partial = !only.isEmpty();
+        if (!partial && directory.isDirectory()) for (File old : directory.listFiles()) Files.delete(old.toPath());
         Files.createDirectories(directory.toPath());
         compiled = ReflectionHelper.findField(ModelRenderer.class, "compiled", "field_78812_q");
         displayList = ReflectionHelper.findField(ModelRenderer.class, "displayList", "field_78811_r");
@@ -162,6 +173,7 @@ public final class EntityImages {
             variants.put(variant.id, variant);
             targets.add(new String[] { variant.id, variant.baseId });
         }
+        if (partial) targets.removeIf(target -> !only.contains(target[0]));
         targets.sort((a, b) -> a[0].compareTo(b[0]));
 
         IconRenderClock.freeze();
@@ -296,11 +308,38 @@ public final class EntityImages {
         // Pixel hash per file (sha1 of "width:height:" and ARGB rows), as icon-hashes.json for the item icons.
         root.put("pixelHashes", new TreeMap<>(hashes));
         root.put("pngCacheHits", writer.cacheHits());
+        File json = new File(output, "entity-images.json");
+        if (partial && json.isFile()) root = mergeInto(json, root, only);
         Files.write(
-            new File(output, "entity-images.json").toPath(),
+            json.toPath(),
             GTNHDumper.GSON.toJson(root)
                 .getBytes(StandardCharsets.UTF_8));
         GTNHDumper.info("已写入实体图片：" + images.size() + " 个实体，" + failures.size() + " 个失败");
+    }
+
+    /** Puts the freshly rendered entries of {@code only} over the existing metadata and drops their stale failures. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> mergeInto(File json, Map<String, Object> fresh, Set<String> only)
+        throws java.io.IOException {
+        Map<String, Object> old = GTNHDumper.GSON
+            .fromJson(new String(Files.readAllBytes(json.toPath()), StandardCharsets.UTF_8), LinkedHashMap.class);
+        if (old == null) return fresh;
+        for (String section : new String[] { "images", "failures", "skipped", "pixelHashes" }) {
+            Map<String, Object> target = old.get(section) instanceof Map ? (Map<String, Object>) old.get(section)
+                : new TreeMap<>();
+            Map<String, Object> source = (Map<String, Object>) fresh.get(section);
+            if (section.equals("pixelHashes")) {
+                if (source != null) target.putAll(source);
+            } else {
+                for (String id : only) {
+                    target.remove(id);
+                    if (source != null && source.containsKey(id)) target.put(id, source.get(id));
+                }
+            }
+            old.put(section, new TreeMap<>(target));
+        }
+        old.put("pngCacheHits", fresh.get("pngCacheHits"));
+        return old;
     }
 
     /**

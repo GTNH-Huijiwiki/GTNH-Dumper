@@ -20,6 +20,8 @@ final class ExportOptions {
     final boolean noImages;
     /** Selected export tasks; empty means the full export. */
     final Set<String> tasks;
+    /** Entity ids for the entityimages task; empty means every entity. Existing images and metadata are kept. */
+    final Set<String> entities;
 
     /** Task names accepted by {@code tasks}, in export order. */
     static final List<String> TASK_NAMES = Collections.unmodifiableList(
@@ -65,6 +67,16 @@ final class ExportOptions {
             selected.add(name);
         }
         tasks = Collections.unmodifiableSet(selected);
+        Set<String> onlyEntities = new LinkedHashSet<>();
+        if (request.has("entities")) for (JsonElement entity : request.getAsJsonArray("entities")) {
+            String id = entity.getAsString()
+                .trim();
+            if (!id.isEmpty()) onlyEntities.add(id);
+        }
+        entities = Collections.unmodifiableSet(onlyEntities);
+        if (!entities.isEmpty() && !(tasks.size() == 1 && tasks.contains("entityimages"))) {
+            throw new IllegalArgumentException("entities requires tasks to be exactly [entityimages]");
+        }
         if (!tasks.isEmpty() && (researchOnly || smoke || imagesOnly)) {
             throw new IllegalArgumentException("tasks replaces researchOnly/smoke/imagesOnly; use one of them");
         }

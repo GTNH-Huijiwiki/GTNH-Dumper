@@ -18,6 +18,10 @@
   只导出实体数据与实体图片。
 
 .EXAMPLE
+  .\scripts\export.ps1 entityimages -Entities 'Thaumcraft.TaintSpore,Thaumcraft.TaintSwarm'
+  只重新渲染这两个实体的图片，其余图片与 entity-images.json 的其它条目保持不变。
+
+.EXAMPLE
   .\scripts\export.ps1 -List
   列出可用的任务名。
 
@@ -37,7 +41,8 @@ param(
     [switch] $Clean,     # 只清理旧导出，不导出
     [switch] $List,      # 只列出任务名
     [switch] $DryRun,    # 只显示会做什么
-    [string] $Jar        # 指定 jar，覆盖 DUMPER_JAR 与 build\libs
+    [string] $Jar,       # 指定 jar，覆盖 DUMPER_JAR 与 build\libs
+    [string] $Entities   # 只重新导出这些实体的图片（逗号分隔注册名），要与任务 entityimages 一起用；其余图片与记录原样保留
 )
 
 $ErrorActionPreference = 'Stop'
@@ -175,6 +180,11 @@ if ($old.Count -eq 1 -and $old[0].FullName -eq $target -and (Get-FileHash $targe
 # ── 自动导出配置 ──────────────────────────────────────────────────────
 $request = [ordered]@{ enabled = $true; outputMode = 'latest'; exitGame = $true }
 if ($full) { $request['noImages'] = [bool]$NoImages } else { $request['tasks'] = $Tasks }
+$entityIds = @($Entities -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if ($entityIds.Count -gt 0) {
+    if ($Tasks.Count -ne 1 -or $Tasks[0] -ne 'entityimages') { throw '-Entities 必须配合且只配合任务 entityimages' }
+    $request['entities'] = $entityIds
+}
 $json = $request | ConvertTo-Json -Compress
 Write-Host "导出：$(if ($full) { '全量' + $(if ($NoImages) { '（不含物品图标）' } else { '' }) } else { $Tasks -join ', ' })"
 Write-Host "输出：$dumps"
