@@ -393,6 +393,26 @@ Amazing Trophies 的方块结构奖杯默认用 VBO 绘制，模型在首次渲�
 
 按 Mod 导出时跳过（群系属于整个整合包）。
 
+## 维度生物群系
+
+全量自动导出（及 `tasks` 中的 `dimensionbiomes`）写出 `dimensionbiomes.json`：`{"method": {...}, "dimensions": [...]}`。
+每个已注册维度一条记录，用新建的维度提供器绑定一个只带种子的内存探测世界（不生成区块、不写存档），取其 `WorldChunkManager`，
+不受当前已加载世界影响。导出用的世界是超平坦的，读不到真实群系，所以探测世界的世界类型取整合包的默认生成器：
+读 `config/defaultworldgenerator.cfg` 的 `World Generator`（GTNH 为 `RWG2_CONTINENTS`），读不到或类型不存在时用原版默认类型；
+采用的类型与来源写在 `method.worldType`、`method.worldTypeSource`。玩家创建世界时改选其他生成器（RWG、超平坦），主世界的群系集合会不同。
+
+- `dimensionId`、`providerClass`、`chunkManagerClass`。
+- `chunkManagerSource`：管理器来源。`overworld` 是地表提供器；`provider` 是维度自己建的管理器（星系、下界、暮色森林等），结果可信；
+  `world-type` 是维度没有自己的管理器，沿用了原版管理器或世界类型给所有维度的那个类，这类维度的真实区块生成器可能根本不用它，`biomes` 不可靠，使用时应跳过。
+- `biomes`：该维度能生成的群系 ID，升序。取法（写在顶层 `method` 里）：对固定的几个种子，各用
+  `getBiomesForGeneration`（四分之一分辨率，每块 1024 格）与 `loadBlockGeneratorData`（每 128 格一块 16×16）
+  扫描原点周围半径 `radius` 格的正方形，取并集。固定生物群系的维度（下界、多数星球）是精确的；
+  主世界这类分层或噪声生成的维度，范围以外极稀有的群系、窄的河流等可能缺失（RWG2 的各类河流、冰海、热带岛等没有采到）。
+- `spawnBiomes`：`getBiomesToSpawnIn()`，只是出生点会选用的群系，不是全部群系，对固定群系的管理器还是共用的默认列表，别当作维度的群系用。
+- `samples`：读取的格数；`errors`：取不到时的原因，此时 `biomes` 可能为空，不做猜测。
+
+按 Mod 导出时跳过（维度属于整个整合包）。
+
 ## 成就与奖杯
 
 全量自动导出（及 `tasks` 中的 `achievements`）写出 `achievements.json`：

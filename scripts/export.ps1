@@ -35,7 +35,7 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(ValueFromRemainingArguments = $true)] [string[]] $Tasks,
+    [Parameter(Position = 0, ValueFromRemainingArguments = $true)] [string[]] $Tasks,
     [switch] $Build,     # 先 gradlew build
     [switch] $NoImages,  # 全量导出时跳过物品图标
     [switch] $Clean,     # 只清理旧导出，不导出

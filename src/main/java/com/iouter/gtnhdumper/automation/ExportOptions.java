@@ -37,6 +37,7 @@ final class ExportOptions {
             "tc4thaumonomicon",
             "betterquesting",
             "biomes",
+            "dimensionbiomes",
             "achievements",
             "entities",
             "entityimages"));
