@@ -99,6 +99,7 @@ public class Transformer {
             if (metadata == null) metadata = new LinkedHashMap<>();
             metadata.put("fuelEnergyEU", (long) src.mSpecialValue * amount);
         }
+        metadata = addVoidMinerWeights(src, metadata);
         if (metadata != null && metadata.isEmpty()) metadata = null;
         thaumcraft.api.aspects.AspectList inputAspects = addonInputAspects(src, metadata);
         // These named pools use the special slot only as an essentia display, not a selectable item input.
@@ -117,6 +118,36 @@ public class Transformer {
                 .withInputAspects(inputAspects)
                 .withDisplayData(src)
                 .withSource(src);
+    }
+
+    /**
+     * 虚空采矿场：NEI 页面的“Total Weight”和矿石提示来自 {@code VoidMinerRecipes.Weights}（放在特殊槽里）。
+     * 配方只导出了换算后的概率（0.01% 精度），这里补上总权重和与 outputItems 同序的各矿石权重。
+     * 该类只存在于较新的 GT5-Unofficial，编译依赖没有它，所以用反射读取；没有该类时什么也不做。
+     */
+    private static Map<String, Object> addVoidMinerWeights(GTRecipe recipe, Map<String, Object> metadata) {
+        Object special = recipe.mSpecialItems;
+        if (special == null || !special.getClass()
+            .getName()
+            .equals("bwcrossmod.galacticgreg.VoidMinerRecipes$Weights")) return metadata;
+        try {
+            Class<?> type = special.getClass();
+            java.lang.reflect.Method total = type.getMethod("getTotalWeight");
+            java.lang.reflect.Method weight = type.getMethod("getWeight", ItemStack.class);
+            ItemStack[] stacks = recipe.getRecipeCategory().recipeMap.getFrontend()
+                .getNEIProperties().itemOutputsGetter.apply(recipe);
+            ArrayList<Float> weights = new ArrayList<>();
+            // 与 getOutputItems 相同：跳过空槽，顺序保持一致。
+            for (ItemStack stack : stacks) {
+                if (stack != null) weights.add((Float) weight.invoke(special, stack));
+            }
+            if (metadata == null) metadata = new LinkedHashMap<>();
+            metadata.put("totalWeight", total.invoke(special));
+            metadata.put("weights", weights);
+        } catch (ReflectiveOperationException error) {
+            throw new IllegalStateException("Cannot read Void Miner weights", error);
+        }
+        return metadata;
     }
 
     /** 工业注魔与炼金的源质需求沿用神秘时代的 inputAspects 结构；其他特殊槽保持原有语义。 */
