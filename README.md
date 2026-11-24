@@ -195,11 +195,19 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 .\scripts\export.ps1                         # 全量导出：先删除 dumper-runs\latest，再重新导出
 .\scripts\export.ps1 entities entityimages   # 只导出这两个任务，其余数据保留
 .\scripts\export.ps1 entityimages -Entities 'Thaumcraft.TaintSpore,Thaumcraft.TaintSwarm'   # 只重画这两个实体的图片，其余图片和记录保留
+.\scripts\export.ps1 englishnames          # 只用 en_US 启动导出英文名，写到 dumper-runs\englishnames.json
 .\scripts\export.ps1 -List                   # 列出任务名
 .\scripts\export.ps1 -Clean                  # 删除 latest 以外的旧导出和 Dumper-* 存档
 ```
 
-其他开关：`-Build`、`-NoImages`（全量时跳过物品图标）、`-DryRun`（只显示会做什么）、`-Jar <路径>`。
+其他开关：`-Build`、`-NoImages`（全量时跳过物品图标）、`-SkipEnglishNames`（全量时不先跑英文名）、`-DryRun`（只显示会做什么）、`-Jar <路径>`。
+
+**语言与英文名**：全量导出先用 `en_US` 启动一次，只导出英文名（`englishnames` 任务，几分钟），再用 `GAME_LANGUAGE`
+（`.env`，默认 `zh_CN`）做主导出。脚本在每次启动前把实例 `options.txt` 的 `lang` 写成对应语言，结束后还原；
+实际语言与预期不符时报错。原因：有些模组在加载时按启动语言把名字写死（如 CropsNH 机器把翻译后的名字传给 GT），
+`originalName` 只靠事后切换语言取不到英文名。主导出通过自动导出配置的 `englishNames`（英文名文件的绝对路径）读取它，
+物品与流体的 `originalName` 优先用这份。NBT 里嵌了本地化文字的物品两次启动的短键不同，对不上的保持主导出里的名字；
+`status.json` 的 `englishNames` 记录文件、条目数与命中数。
 同一时间只能有一个游戏在跑，游戏已在运行时脚本会直接报错。
 
 数据固定写入 `<游戏目录>\dumper-runs\latest\dumps`，工具链的 `DUMPS_DIR` 指向这里即可。全量导出会先删掉整个 `latest`，
@@ -258,10 +266,13 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 
 - **并行编码**：渲染仍在客户端线程，PNG 编码交给后台线程，默认 CPU 核数减 2（最多 16）。
   待编码像素按字节限额排队，默认 512 MB。
-- **内容缓存**：每张图按像素计算 SHA-1，编码结果存进 `.minecraft/dumper-cache/png/<前两位>/<哈希>.png`，
+- **内容缓存**：每张图按像素计算 SHA-1，编码结果存进缓存目录的 `<前两位>/<哈希>.png`（默认 `.minecraft/dumper-cache/png`），
   输出目录里的文件是指向缓存的硬链接（不支持时复制）。同一实例再次导出时，像素没变的图片不再编码，
   `icon-performance.json` 的 `pngCacheHits` 记录命中数。缓存可以随时删除，下次导出重新生成。
   不要原地修改输出目录里的 PNG，否则会改坏缓存；需要修改时先复制。
+  缓存目录可显式指定：自动导出配置的 `pngCacheDir`（绝对路径）优先，其次 JVM 参数 `-Dgtnhdumper.pngCacheDir=路径`。
+  放在游戏目录之外，换整合包版本或重装实例后仍可沿用。`scripts/export.ps1` 默认把它设为仓库下 gitignore 的 `dumper-cache/`（`PNG_CACHE_DIR` 可改）。
+  输出目录与缓存不在同一磁盘时无法硬链接，自动退回复制。
 - **像素哈希清单**：`icon-hashes.json` 的 `images` 把每个 PNG 文件名映射到像素哈希
   （`sha1("宽:高:" + 按行的 ARGB 大端字节)`）。哈希只看像素，与 PNG 编码无关；工具链用它比较两次导出。
 - **动画帧条上限**：帧条长度是所有动画帧数的最小公倍数，可能远超内存。原始帧条超过 256 MB 的动画
@@ -282,6 +293,7 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 | `-Dgtnhdumper.pngWorkers=N` | CPU 核数 − 2，最多 16 | PNG 编码线程数；`0` 表示在渲染线程上同步编码 |
 | `-Dgtnhdumper.pngQueueMB=N` | `512` | 待编码像素的内存上限 |
 | `-Dgtnhdumper.pngCache=false` | `true` | 关闭内容缓存，直接写 PNG |
+| `-Dgtnhdumper.pngCacheDir=路径` | `.minecraft/dumper-cache/png` | 缓存目录；自动导出配置的 `pngCacheDir` 优先 |
 | `-Dgtnhdumper.maxAnimationMB=N` | `256` | 单个动画帧条的原始大小上限 |
 
 整合包实例建议最大内存设为 8 GB 或以上。
@@ -441,9 +453,29 @@ Amazing Trophies 的方块结构奖杯默认用 VBO 绘制，模型在首次渲�
 - 生物另有：`width`/`height`、`fireImmune`、基础属性 `health`、`attackDamage`、`movementSpeed`、`followRange`、
   `knockbackResistance`，`armor`、`experience`、`undead`、`creatureAttribute`。实体只构造、不加入世界。
 - `mobsInfo`（加载 MobsInfo 时）：`health`、精英怪 `infernal`（`always`/`allowed`/`never`）、能否装入灵魂瓶 `soulVial`、
-  和平难度可否生成 `peaceful`、生成群系 ID `spawnBiomes` 与其他来源 `spawnOther`（结构、事件），掉落 `drops`
-  （物品 key、数量、类型、几率（万分比）、抢夺、仅玩家击杀、随机附魔与耐久等）。
+  和平难度可否生成 `peaceful`、生成群系 ID `spawnBiomes` 与其他来源 `spawnOther`（结构、事件），能否掉落怪物灵魂 `soulDrop`（真时才写）。
+  掉落本身不在这里：Mob Info 配方（`recipes/mobsinfo`）逐掉落带有同样的字段，见下文“Mob Info 配方”。
 - `poweredSpawner`（加载 Ender IO 时，仅生物）：电动刷怪笼黑名单 `blacklisted` 与耗能倍率 `costMultiplier`。
+
+### Mob Info 配方
+
+`recipes/mobsinfo/MobHandler_mobhandler.json` 是 Mob Info 的 NEI 页面，每个实体一条。除屏幕上的文字外，每个掉落还带结构化字段，
+可直接计算而不必解析提示文字：
+
+- `chance`：几率，万分比（10000 为必掉，省略即必掉）；`variableChance` 为真时几率由修饰器决定，`chance` 只是占位。
+- `lootable`（受抢夺影响）、`playerOnly`（仅玩家击杀，严格限制）、`variableChance`，为真时才写。
+- `chanceModifiers`：修饰器列表，每项 `type`（类名，如 `NormalChance`、`BaseChance`、`DropsOnlyInDimension`、
+  `DropsOnlyWithEnchant`、`DropsOnlyUsing`、`OrUsing`、`OrBiome`、`EachLevelOfGives`、`PoweredCreeper`、
+  `DropsOnlyWithWeaknessIII`）加构造参数（维度号 `dimension`、附魔 `enchantmentData`、武器 `weapon`、`chance`、
+  `newChance`、`biome` 等；物品用短键，附魔写 `id` 与 `name`，群系写 ID）。
+- `additionalInfo`：该掉落的附加说明。
+
+这些字段取自 MobsInfo 自己的掉落（`MobRecipe.mOutputs`），与 NEI 页面按类型、几率、物品配对；配不上的掉落只有 `chance`。
+`spawnList` 是该实体的生成地点，`spawnTotal` 是 MobsInfo 已知的地点总数：NEI 页面据此写“在所有地方均会生成”（相等）、“在 N 处生成”（N 小于总数的一半）或“除了 M 处均会生成”（M = 总数 − N）。
+`eecEut`、`eecDuration`（tick）只在工业屠宰场（KubaTech 的 Extreme Entity Crusher）能处理该实体时写，取自它的配方表；
+没有这两项的实体不能被工业屠宰场处理。每个掉落另有 `eecOrder`：它在工业屠宰场配方掉落列表里的位置（0 起）；没有该字段的掉落不在工业屠宰场的列表里。
+该列表的顺序与 MobsInfo 自己的掉落顺序、NEI 页面的分组顺序都不同，按 `eecOrder` 排序才能还原工业屠宰场看到的顺序。
+工业屠宰场自己的配方不再单独导出，见“已移除的导出”。
 
 MobsInfo 另外登记、注册名不在 EntityList 中的变体（如凋灵骷髅 `witherSkeleton`）也导出为单独记录：
 `id` 为 `<注册名>#<NBT 字段>=<值>,…`（如 `Skeleton#SkeletonType=1`，与任务击杀要求的写法相同），
@@ -524,3 +556,7 @@ PNG 与物品图标共用内容缓存（`.minecraft/dumper-cache/png/`），像�
 `gtneioreplugin` 的 NEI 配方重建）、GT 结构、任务与任务线（任务由 BetterQuesting 的任务文件处理）、
 旧的神秘时代研究表 `tc4research.json`（由魔导手册导出取代），以及自动导出的 `layoutsOnly` NEI 布局模式。
 自动导出的 `latest` 全量刷新会删除这些旧文件，避免误用过期数据。
+
+另外移除了 Extreme Entity Crusher 配方（`recipes/kubatech/ExtremeEntityCrusher.json`，标识 `kubatech.eec`）。游戏里没有对应的
+NEI 页面，那是用 KubaTech 的配方表加规则拼出来的投影，与 Mob Info 是同一份掉落数据。需要的数值（掉落几率、修饰器、
+耗电与耗时）现在都在 Mob Info 配方里。

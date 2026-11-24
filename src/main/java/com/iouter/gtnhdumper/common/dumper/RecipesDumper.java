@@ -264,13 +264,6 @@ public class RecipesDumper extends FilteredDataDumper {
                 }
             }
         }
-        if (CommonProxy.isKubaTechLoaded) {
-            try {
-                RecipeItemVariants.captureDependencies(EECRecipeDumper.build());
-            } catch (Exception | LinkageError e) {
-                RecipeItemVariants.reportFailure(EECRecipeDumper.RECIPE_NAME, e);
-            }
-        }
     }
 
     /**
@@ -346,18 +339,7 @@ public class RecipesDumper extends FilteredDataDumper {
                 GTNHDumper.LOG.error(e);
             }
         }
-        if (CommonProxy.isKubaTechLoaded) try {
-            if (EECRecipeDumper.dump()) recipesList.add(new String[] { EECRecipeDumper.RECIPE_NAME });
-        } catch (Exception e) {
-            GTNHDumper.info("导出" + EECRecipeDumper.RECIPE_NAME + "时发生错误：" + e.getLocalizedMessage());
-            GTNHDumper.LOG.error(e);
-        }
         if (filter.isActive()) {
-            if (CommonProxy.isKubaTechLoaded) {
-                skipped.put(
-                    "kubatech.eec",
-                    "Original registering mod is not recorded; matching item outputs are still exported");
-            }
             File report = filter.outputFile("recipes_filter_report.json");
             try {
                 java.nio.file.Files.createDirectories(
