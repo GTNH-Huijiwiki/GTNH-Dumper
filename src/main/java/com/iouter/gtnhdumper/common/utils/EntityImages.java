@@ -39,6 +39,7 @@ import org.lwjgl.opengl.GL11;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.iouter.gtnhdumper.GTNHDumper;
 import com.iouter.gtnhdumper.Tags;
+import com.iouter.gtnhdumper.automation.ExportSession;
 
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.relauncher.ReflectionHelper;
@@ -215,9 +216,7 @@ public final class EntityImages {
         if (ownSlim != null) slim(player, false);
         // Same content-addressed PNG cache as the item icons: unchanged pixels are hard-linked, not encoded again,
         // so the files keep their modification time and the toolchain's hash cache hits on re-runs.
-        File cache = Boolean.parseBoolean(System.getProperty("gtnhdumper.pngCache", "true"))
-            ? new File(Minecraft.getMinecraft().mcDataDir, "dumper-cache/png")
-            : null;
+        File cache = ExportSession.pngCache();
         PngWriter writer = new PngWriter(PngWriter.defaultWorkers(), cache);
         FBOHelper.setPngWriter(writer);
         try {

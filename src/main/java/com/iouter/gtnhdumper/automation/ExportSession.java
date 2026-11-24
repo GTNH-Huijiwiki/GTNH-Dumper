@@ -92,6 +92,9 @@ public final class ExportSession {
     private final long seed;
     private final File imageMetadata;
     private final File imageResume;
+    private final File pngCacheDirectory;
+    private final File englishNamesFile;
+    private final com.iouter.gtnhdumper.common.utils.EnglishNames englishNames;
     private final List<String> researchKeys = new ArrayList<>();
     private final List<String> completed = new ArrayList<>();
     private final List<String> failed = new ArrayList<>();
@@ -154,6 +157,24 @@ public final class ExportSession {
             request.get("imageResume")
                 .getAsString())
             : null;
+        pngCacheDirectory = request.has("pngCacheDir") && !request.get("pngCacheDir")
+            .getAsString()
+            .isEmpty() ? new File(
+                request.get("pngCacheDir")
+                    .getAsString())
+                : null;
+        if (pngCacheDirectory != null && !pngCacheDirectory.isAbsolute())
+            throw new IllegalArgumentException("pngCacheDir must be an absolute path");
+        englishNamesFile = request.has("englishNames") && !request.get("englishNames")
+            .getAsString()
+            .isEmpty() ? new File(
+                request.get("englishNames")
+                    .getAsString())
+                : null;
+        if (englishNamesFile != null && (!englishNamesFile.isAbsolute() || !englishNamesFile.isFile()))
+            throw new IllegalArgumentException("englishNames must be the absolute path of an existing file");
+        englishNames = englishNamesFile == null ? null
+            : com.iouter.gtnhdumper.common.utils.EnglishNames.read(englishNamesFile);
         directories = ExportOutput.create(gameDirectory.toPath(), runId, options.latest(), filter);
         runDirectory = directories.runDirectory.toFile();
         output = directories.outputDirectory.toFile();
@@ -180,6 +201,7 @@ public final class ExportSession {
             consumed.remove("managedByRunner");
             consumed.remove("imageMetadata");
             consumed.remove("imageResume");
+            consumed.remove("englishNames");
             File temporary = new File(requestFile.getParentFile(), "gtnhdumper-autorun.tmp");
             Files.write(
                 temporary.toPath(),
@@ -272,6 +294,24 @@ public final class ExportSession {
 
     public static File imageResume() {
         return isExporting() ? active.imageResume : null;
+    }
+
+    /**
+     * Content-addressed PNG cache directory, or null when the cache is disabled. Priority: the autorun request's
+     * {@code pngCacheDir}, then {@code -Dgtnhdumper.pngCacheDir}, then {@code <game directory>/dumper-cache/png}.
+     * A cache outside the game directory survives instance replacement, so a new modpack version starts warm.
+     */
+    public static File pngCache() {
+        if (!Boolean.parseBoolean(System.getProperty("gtnhdumper.pngCache", "true"))) return null;
+        if (isExporting() && active.pngCacheDirectory != null) return active.pngCacheDirectory;
+        String property = System.getProperty("gtnhdumper.pngCacheDir", "");
+        if (!property.isEmpty()) return new File(property).getAbsoluteFile();
+        return new File(Minecraft.getMinecraft().mcDataDir, "dumper-cache/png");
+    }
+
+    /** English names from an en_US launch (request {@code englishNames}), or null when none were supplied. */
+    public static com.iouter.gtnhdumper.common.utils.EnglishNames englishNames() {
+        return isExporting() ? active.englishNames : null;
     }
 
     public static void progress(String message) {
@@ -619,6 +659,11 @@ public final class ExportSession {
         else skipped.put("itemicon", "noImages: existing images and icon metadata are retained");
         if (options.imagesOnly) return;
         add("advitempanel", new AdvItemPanelDumper(), 0);
+        // Only on request: it must run in a client started with en_US and is not part of the normal export.
+        if (options.tasks.contains("englishnames")) tasks.add(
+            new ExportTask(
+                "englishnames",
+                () -> com.iouter.gtnhdumper.common.utils.EnglishNames.write(new File(output, "englishnames.json"))));
         tasks.add(new ExportTask("recipes", () -> new RecipesDumper().dump(0)));
         add("oreDictionary", new OreDictionaryDumper(), 0);
         add("fluid", new FluidsDumper(), 0);
@@ -671,7 +716,8 @@ public final class ExportSession {
 
     /** Partial export: keep the requested tasks; the item scan only when items are enumerated. */
     private void keepSelectedTasks() {
-        boolean itemsNeeded = options.tasks.contains("itemicon") || options.tasks.contains("advitempanel");
+        boolean itemsNeeded = options.tasks.contains("itemicon") || options.tasks.contains("advitempanel")
+            || options.tasks.contains("englishnames");
         tasks.removeIf(task -> task.name.equals("item-variants") ? !itemsNeeded : !options.tasks.contains(task.name));
         skipped.keySet()
             .retainAll(options.tasks);
@@ -702,6 +748,15 @@ public final class ExportSession {
         result.addProperty("managedByRunner", managedByRunner);
         result.addProperty("seed", seed);
         result.addProperty("language", Minecraft.getMinecraft().gameSettings.language);
+        if (englishNames != null) {
+            JsonObject english = new JsonObject();
+            english.addProperty("file", englishNamesFile.getAbsolutePath());
+            english.addProperty("items", englishNames.itemCount());
+            english.addProperty("fluids", englishNames.fluidCount());
+            english.addProperty("itemsApplied", englishNames.appliedItems());
+            english.addProperty("fluidsApplied", englishNames.appliedFluids());
+            result.add("englishNames", english);
+        }
         result.addProperty("researchCount", researchKeys.size());
         result.addProperty("handlerCount", GuiUsageRecipe.usagehandlers.size());
         result.add("completed", GTNHDumper.GSON.toJsonTree(completed));

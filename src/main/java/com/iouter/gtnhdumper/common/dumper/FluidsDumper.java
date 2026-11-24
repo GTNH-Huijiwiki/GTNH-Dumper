@@ -75,6 +75,8 @@ public class FluidsDumper extends WikiDumper {
         LinkedList<Object[]> list = new LinkedList<>();
         Map<String, Fluid> fluids = FluidRegistry.getRegisteredFluids();
         ModFilter filter = ModFilter.current();
+        com.iouter.gtnhdumper.common.utils.EnglishNames englishNames = com.iouter.gtnhdumper.automation.ExportSession
+            .englishNames();
 
         Map<Fluid, String> originalNameMap = new HashMap<>();
         Utils.getEnglishTranslation(() -> {
@@ -87,7 +89,8 @@ public class FluidsDumper extends WikiDumper {
         for (String fluidKey : fluids.keySet()) {
             Fluid fluid = fluids.get(fluidKey);
             if (fluid == null || !filter.matchesFluid(fluid)) continue;
-            String originalName = originalNameMap.get(fluid);
+            String originalName = englishNames == null ? null : englishNames.fluid("fluid." + fluidKey);
+            if (originalName == null) originalName = originalNameMap.get(fluid);
             String translatedName = getFluidName(fluid);
             int luminosity = fluid.getLuminosity();
             int density = fluid.getDensity();

@@ -249,9 +249,7 @@ public class ItemIconDumper extends WikiDumper {
         long started = System.nanoTime();
         int workers = Integer.getInteger("gtnhdumper.pngWorkers", PngWriter.defaultWorkers());
         // Content-addressed PNG cache shared by all runs of this instance; unchanged pixels are linked, not encoded.
-        File cache = Boolean.parseBoolean(System.getProperty("gtnhdumper.pngCache", "true"))
-            ? new File(Minecraft.getMinecraft().mcDataDir, "dumper-cache/png")
-            : null;
+        File cache = ExportSession.pngCache();
         PngWriter writer = new PngWriter(workers, cache);
         synchronized (OVERSIZED_ANIMATIONS) {
             OVERSIZED_ANIMATIONS.clear();

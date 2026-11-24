@@ -7,6 +7,8 @@
   输出固定在 <游戏目录>\dumper-runs\latest\dumps，工具链的 DUMPS_DIR 指向这里。
     不带任务名：全量导出。先删除 dumper-runs\latest，再重新导出。
     带任务名：  只重新导出这些任务（latest 模式），其余数据原样保留。
+  全量导出先用 en_US 启动一次导出英文名，再用 GAME_LANGUAGE（默认 zh_CN）做主导出；语言由脚本写进 options.txt。
+  PNG 内容缓存默认在仓库的 dumper-cache（PNG_CACHE_DIR 可改），不在实例里。
   配置见 .env.example。
 
 .EXAMPLE
@@ -20,6 +22,10 @@
 .EXAMPLE
   .\scripts\export.ps1 entityimages -Entities 'Thaumcraft.TaintSpore,Thaumcraft.TaintSwarm'
   只重新渲染这两个实体的图片，其余图片与 entity-images.json 的其它条目保持不变。
+
+.EXAMPLE
+  .\scripts\export.ps1 englishnames
+  只用 en_US 启动导出英文名（写到 dumper-runs\englishnames.json）。
 
 .EXAMPLE
   .\scripts\export.ps1 -List
@@ -41,6 +47,7 @@ param(
     [switch] $Clean,     # 只清理旧导出，不导出
     [switch] $List,      # 只列出任务名
     [switch] $DryRun,    # 只显示会做什么
+    [switch] $SkipEnglishNames, # 全量导出时不先用 en_US 跑一次英文名（少启动一次游戏，但 CropsNH 等机器的英文名会是中文）
     [string] $Jar,       # 指定 jar，覆盖 DUMPER_JAR 与 build\libs
     [string] $Entities   # 只重新导出这些实体的图片（逗号分隔注册名），要与任务 entityimages 一起用；其余图片与记录原样保留
 )
@@ -96,6 +103,10 @@ $runs = Join-Path $gameDir 'dumper-runs'
 $latest = Join-Path $runs 'latest'
 $dumps = Join-Path $latest 'dumps'
 $config = Join-Path $gameDir 'config\gtnhdumper-autorun.json'
+# PNG 内容缓存默认放在本仓库的 dumper-cache（已 gitignore），不随实例走，换整合包版本也能复用。
+$cacheDir = Get-Setting 'PNG_CACHE_DIR' (Join-Path $Repo 'dumper-cache')
+if (-not [IO.Path]::IsPathRooted($cacheDir)) { $cacheDir = Join-Path $Repo $cacheDir }
+$cacheDir = [IO.Path]::GetFullPath($cacheDir)
 $mods = Join-Path $gameDir 'mods'
 
 function Test-Inside([string]$Path, [string]$Parent) {
@@ -122,7 +133,7 @@ if ($Clean) {
     $saves = Join-Path $gameDir 'saves'
     if (Test-Path $saves) { $victims += Get-ChildItem $saves -Directory -Filter 'Dumper-*' }
     foreach ($v in $victims) { if (-not $DryRun) { Write-Host "删除 $($v.FullName)" }; Remove-Safely $v.FullName $gameDir }
-    Write-Host "已清理 $($victims.Count) 个目录；保留 $latest 与 PNG 缓存 $(Join-Path $gameDir 'dumper-cache')。"
+    Write-Host "已清理 $($victims.Count) 个目录；保留 $latest 与 PNG 缓存 $cacheDir。"
     return
 }
 
@@ -177,63 +188,114 @@ if ($old.Count -eq 1 -and $old[0].FullName -eq $target -and (Get-FileHash $targe
     if ($DryRun) { Write-Host "  [dry-run] 复制到 $target" } else { Copy-Item -LiteralPath $Jar -Destination $target -Force }
 }
 
-# ── 自动导出配置 ──────────────────────────────────────────────────────
-$request = [ordered]@{ enabled = $true; outputMode = 'latest'; exitGame = $true }
+# ── 导出 ──────────────────────────────────────────────────────────────
+# 主导出用 GAME_LANGUAGE（默认 zh_CN，维基要中文名）；英文名用 en_US 单独启动一次，写成 englishnames.json，
+# 主导出读它来填 originalName（有些模组把名字在加载时按启动语言定死，事后切语言改不了）。
+$gameLanguage = Get-Setting 'GAME_LANGUAGE' 'zh_CN'
+$englishFile = Join-Path $runs 'englishnames.json'
+$englishOnly = $Tasks.Count -eq 1 -and $Tasks[0] -eq 'englishnames'
+if ($Tasks -contains 'englishnames' -and -not $englishOnly) { throw 'englishnames 必须单独运行：它要用 en_US 启动，不能和别的任务一起。' }
+$runEnglish = $englishOnly -or ($full -and -not $SkipEnglishNames)
+$optionsFile = Join-Path $gameDir 'options.txt'
+
+function Set-GameLanguage([string]$Lang) {
+    $lines = @()
+    if (Test-Path $optionsFile) { $lines = @(Get-Content $optionsFile -Encoding UTF8) }
+    $found = $false
+    $lines = @($lines | ForEach-Object { if ($_ -match '^lang:') { $found = $true; "lang:$Lang" } else { $_ } })
+    if (-not $found) { $lines = @("lang:$Lang") + $lines }
+    [IO.File]::WriteAllText($optionsFile, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+}
+
+# 启动一次游戏并等它导出完。成功返回状态对象，失败抛错。
+function Invoke-GameRun([System.Collections.IDictionary]$Request, [string]$Language, [string]$Label) {
+    $json = $Request | ConvertTo-Json -Compress
+    Write-Host "[$Label] 语言 $Language，配置：$json"
+    if ($DryRun) { Write-Host '  [dry-run] 写入配置、启动 Prism 并等待游戏退出'; return $null }
+    if (-not $instance) { throw '启动需要 PRISM_INSTANCE。' }
+    New-Item -ItemType Directory -Force (Split-Path $config) | Out-Null
+    Set-GameLanguage $Language
+    Set-Content -LiteralPath $config -Value $json -Encoding ASCII
+    $startedMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $statusFile = Join-Path $latest 'status.json'
+    try {
+        Start-Process $prismExe -ArgumentList @('--launch', $instance, '--offline', $account) -WindowStyle Hidden
+        $game = $null
+        for ($i = 0; $i -lt 100 -and -not $game; $i++) { Start-Sleep -Seconds 3; $game = Get-GameProcess }
+        if (-not $game) { throw '游戏没有启动，检查 PRISM_EXE、PRISM_INSTANCE 与 PRISM_ACCOUNT。' }
+        Write-Host "游戏已启动（pid $($game.ProcessId)），导出中，约需几分钟到半小时……"
+        $deadline = (Get-Date).AddMinutes([int](Get-Setting 'EXPORT_TIMEOUT_MIN' '120'))
+        $lastStage = ''
+        while (Get-Process -Id $game.ProcessId -ErrorAction SilentlyContinue) {
+            if ((Get-Date) -gt $deadline) { Stop-Process -Id $game.ProcessId -Force; throw '导出超时，已关闭游戏。' }
+            Start-Sleep -Seconds 10
+            if (Test-Path $statusFile) {
+                try {
+                    $s = Get-Content $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
+                    if ($s.updatedMillis -ge $startedMs -and "$($s.stage) $($s.message)" -ne $lastStage) {
+                        $lastStage = "$($s.stage) $($s.message)"
+                        Write-Host "  $(Get-Date -Format HH:mm:ss) $lastStage"
+                    }
+                } catch { }
+            }
+        }
+    } finally {
+        # 不管成败，语言设置还原成主导出的语言，免得下次手动启动是英文。
+        Set-GameLanguage $gameLanguage
+    }
+    if (-not (Test-Path $statusFile)) { throw "游戏已退出但没有状态文件，导出没有开始：$statusFile（看游戏 logs\latest.log）。" }
+    $s = Get-Content $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($s.updatedMillis -lt $startedMs) { throw '状态文件不是这次写的，导出没有开始（看游戏 logs\latest.log）。' }
+    if ($s.language -ne $Language) { throw "导出实际用的语言是 $($s.language)，不是 $Language；检查实例的 options.txt。" }
+    Write-Host ''
+    Write-Host "[$Label] 状态：$($s.stage)，完成 $(@($s.completed).Count) 项，失败 $(@($s.failed).Count) 项"
+    foreach ($f in @($s.failed)) { Write-Host "  失败：$f" }
+    foreach ($p in $s.taskMillis.PSObject.Properties) { Write-Host ('  {0,-18} {1,6:N0} 秒' -f $p.Name, ($p.Value / 1000)) }
+    if ($s.stage -ne 'EXPORTED') { throw "[$Label] 没有导出完成（$($s.stage)）。" }
+    return $s
+}
+
+Write-Host "输出：$dumps"
+Write-Host "PNG 缓存：$cacheDir"
+
+# ── 第一步：en_US 导出英文名 ───────────────────────────────────────────
+if ($runEnglish) {
+    $null = Invoke-GameRun ([ordered]@{ enabled = $true; outputMode = 'latest'; exitGame = $true; tasks = @('englishnames') }) 'en_US' '英文名'
+    $produced = Join-Path $dumps 'englishnames.json'
+    if ($DryRun) { Write-Host "  [dry-run] 把 $produced 复制到 $englishFile" }
+    else {
+        if (-not (Test-Path $produced)) { throw "没有生成英文名文件：$produced" }
+        Copy-Item -LiteralPath $produced -Destination $englishFile -Force
+        Write-Host "英文名文件：$englishFile"
+    }
+}
+if ($englishOnly) { return }
+
+# ── 第二步：主导出 ─────────────────────────────────────────────────────
+$request = [ordered]@{ enabled = $true; outputMode = 'latest'; exitGame = $true; pngCacheDir = $cacheDir }
 if ($full) { $request['noImages'] = [bool]$NoImages } else { $request['tasks'] = $Tasks }
 $entityIds = @($Entities -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if ($entityIds.Count -gt 0) {
     if ($Tasks.Count -ne 1 -or $Tasks[0] -ne 'entityimages') { throw '-Entities 必须配合且只配合任务 entityimages' }
     $request['entities'] = $entityIds
 }
-$json = $request | ConvertTo-Json -Compress
-Write-Host "导出：$(if ($full) { '全量' + $(if ($NoImages) { '（不含物品图标）' } else { '' }) } else { $Tasks -join ', ' })"
-Write-Host "输出：$dumps"
-if ($DryRun) {
-    Write-Host "  [dry-run] 写入 $config ：$json"
-    if ($full -and (Test-Path $latest)) { Remove-Safely $latest $runs }
-    Write-Host '  [dry-run] 启动 Prism 并等待游戏退出'
-    return
-}
-New-Item -ItemType Directory -Force (Split-Path $config) | Out-Null
-if ($full -and (Test-Path $latest)) {
-    Write-Host '全量导出：先删除固定目录 latest'
-    Remove-Safely $latest $runs
-}
-Set-Content -LiteralPath $config -Value $json -Encoding ASCII
-
-# ── 启动并等待 ────────────────────────────────────────────────────────
-$startedMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-if (-not $instance) { throw '启动需要 PRISM_INSTANCE。' }
-Start-Process $prismExe -ArgumentList @('--launch', $instance, '--offline', $account) -WindowStyle Hidden
-$game = $null
-for ($i = 0; $i -lt 100 -and -not $game; $i++) { Start-Sleep -Seconds 3; $game = Get-GameProcess }
-if (-not $game) { throw '游戏没有启动，检查 PRISM_EXE、PRISM_INSTANCE 与 PRISM_ACCOUNT。' }
-Write-Host "游戏已启动（pid $($game.ProcessId)），导出中，约需几分钟到半小时……"
-
-$deadline = (Get-Date).AddMinutes([int](Get-Setting 'EXPORT_TIMEOUT_MIN' '120'))
-$lastStage = ''
-$statusFile = Join-Path $latest 'status.json'
-while (Get-Process -Id $game.ProcessId -ErrorAction SilentlyContinue) {
-    if ((Get-Date) -gt $deadline) { Stop-Process -Id $game.ProcessId -Force; throw '导出超时，已关闭游戏。' }
-    Start-Sleep -Seconds 10
-    if (Test-Path $statusFile) {
-        try {
-            $s = Get-Content $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
-            if ($s.updatedMillis -ge $startedMs -and "$($s.stage) $($s.message)" -ne $lastStage) {
-                $lastStage = "$($s.stage) $($s.message)"
-                Write-Host "  $(Get-Date -Format HH:mm:ss) $lastStage"
-            }
-        } catch { }
+# 用到物品或流体名称的导出才带英文名文件；它是上一次 en_US 导出的结果，换整合包版本后要重新生成。
+$usesNames = $full -or ($Tasks -contains 'advitempanel') -or ($Tasks -contains 'fluid')
+if ($usesNames) {
+    if (Test-Path $englishFile) {
+        $request['englishNames'] = $englishFile
+        Write-Host "英文名文件：$englishFile（生成于 $((Get-Item $englishFile).LastWriteTime)）"
+    } elseif ($DryRun -and $runEnglish) {
+        $request['englishNames'] = $englishFile
+    } else {
+        Write-Warning '没有英文名文件：加载时按启动语言定死的名字（如 CropsNH 机器）会是中文。先运行 .\scripts\export.ps1 englishnames。'
     }
 }
-
-# ── 结果 ──────────────────────────────────────────────────────────────
-if (-not (Test-Path $statusFile)) { throw "游戏已退出但没有状态文件，导出没有开始：$statusFile（看游戏 logs\latest.log）。" }
-$s = Get-Content $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
-if ($s.updatedMillis -lt $startedMs) { throw '状态文件不是这次写的，导出没有开始（看游戏 logs\latest.log）。' }
-Write-Host ''
-Write-Host "状态：$($s.stage)，完成 $(@($s.completed).Count) 项，失败 $(@($s.failed).Count) 项"
-foreach ($f in @($s.failed)) { Write-Host "  失败：$f" }
-foreach ($p in $s.taskMillis.PSObject.Properties) { Write-Host ('  {0,-18} {1,6:N0} 秒' -f $p.Name, ($p.Value / 1000)) }
-Write-Host "数据目录（工具链的 DUMPS_DIR）：$dumps"
-if ($s.stage -ne 'EXPORTED') { exit 1 }
+Write-Host "导出：$(if ($full) { '全量' + $(if ($NoImages) { '（不含物品图标）' } else { '' }) } else { $Tasks -join ', ' })"
+if ($full -and (Test-Path $latest)) {
+    if ($DryRun) { Write-Host '  [dry-run] 全量导出：先删除固定目录 latest' }
+    else { Write-Host '全量导出：先删除固定目录 latest' }
+    Remove-Safely $latest $runs
+}
+$s = Invoke-GameRun $request $gameLanguage '主导出'
+if ($s) { Write-Host "数据目录（工具链的 DUMPS_DIR）：$dumps" }

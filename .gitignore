@@ -42,3 +42,4 @@ layout.json
 
 # scripts/export.ps1 的本地配置
 /.env
+/dumper-cache/
