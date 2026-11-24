@@ -65,6 +65,7 @@ public class AdvItemPanelDumper extends WikiDumper {
 
         List<ItemStack> itemStacks = AllItemStacks.getFilteredItemStacks();
         Map<ItemStack, String> originalNameMap = getOriginalNameMap(itemStacks);
+        com.iouter.gtnhdumper.common.utils.EnglishNames englishNames = ExportSession.englishNames();
         int visited = 0;
         for (ItemStack identity : itemStacks) {
             if (++visited % 1000 == 0) ExportSession.progress("advitempanel: " + visited + "/" + itemStacks.size());
@@ -132,11 +133,15 @@ public class AdvItemPanelDumper extends WikiDumper {
                 }
             }
 
+            String shortKey = Utils.getItemStackShortKey(identity);
+            // Names baked in at load time follow the launch language; an en_US launch's names take precedence.
+            String originalName = englishNames == null ? null : englishNames.item(shortKey);
+            if (originalName == null) originalName = originalNameMap.get(identity);
+
             list.add(
-                new Object[] { Utils.getItemStackShortKey(identity), Utils.getItemKey(identity), nbt,
-                    originalNameMap.get(identity), translatedName, tooltip, tooltips[TOOLTIP_LSHIFT],
-                    tooltips[TOOLTIP_LCONTROL], tooltips[TOOLTIP_LSHIFT_AND_LCONTROL], modName, imageName, aspectList,
-                    tooltipStats });
+                new Object[] { shortKey, Utils.getItemKey(identity), nbt, originalName, translatedName, tooltip,
+                    tooltips[TOOLTIP_LSHIFT], tooltips[TOOLTIP_LCONTROL], tooltips[TOOLTIP_LSHIFT_AND_LCONTROL],
+                    modName, imageName, aspectList, tooltipStats });
         }
 
         return list;

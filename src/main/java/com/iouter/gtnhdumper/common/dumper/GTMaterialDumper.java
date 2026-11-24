@@ -634,7 +634,14 @@ public class GTMaterialDumper extends WikiDumper {
                         .anyMatch(filter::matchesMaterialOwner))
             .map(
                 innerMap -> Arrays.stream(header())
-                    .map(key -> innerMap.getOrDefault(key, null))
+                    .map(key -> {
+                        Object value = innerMap.getOrDefault(key, null);
+                        // Owner names registered by some addons carry colour codes (§aGood Generator); the filter above
+                        // matches the registered name, the exported value is plain text.
+                        return MOD.equals(key) && value instanceof String owners
+                            ? net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(owners)
+                            : value;
+                    })
                     .toArray(Object[]::new))
             .collect(Collectors.toCollection(LinkedList::new));
     }

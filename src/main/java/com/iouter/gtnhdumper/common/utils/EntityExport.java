@@ -474,11 +474,18 @@ public final class EntityExport {
                 if (!biomes.isEmpty()) out.put("spawnBiomes", biomes);
                 if (!other.isEmpty()) out.put("spawnOther", other);
             }
+            // The drops themselves are in the Mob Info recipe (recipes/mobsinfo, same fields); only whether the mob can
+            // drop its Draconic Evolution soul stays here, for the entity page's info box.
             Object drops = get(mob, "mOutputs");
-            if (drops instanceof Collection<?>list && !list.isEmpty()) {
-                List<Map<String, Object>> rows = new ArrayList<>();
-                for (Object drop : list) rows.add(drop(drop));
-                out.put("drops", rows);
+            if (drops instanceof Collection<?>list) {
+                for (Object drop : list) {
+                    Object stack = get(drop, "stack");
+                    if (stack instanceof ItemStack itemStack && Utils.getItemStackShortKey(itemStack)
+                        .startsWith("DraconicEvolution:mobSoul")) {
+                        out.put("soulDrop", true);
+                        break;
+                    }
+                }
             }
             row.put("mobsInfo", out);
         }
@@ -492,40 +499,6 @@ public final class EntityExport {
             } catch (ReflectiveOperationException e) {
                 return spawn.toString();
             }
-        }
-
-        private Map<String, Object> drop(Object drop) {
-            Map<String, Object> out = new LinkedHashMap<>();
-            ItemStack stack = (ItemStack) get(drop, "stack");
-            if (stack != null) {
-                out.put("item", Utils.getItemStackShortKey(stack));
-                out.put("count", stack.stackSize);
-            }
-            out.put("type", String.valueOf(get(drop, "type")));
-            // MobsInfo keeps chances in 1/100 %: 10000 = always.
-            out.put("chance", get(drop, "chance"));
-            for (String flag : new String[] { "lootable", "playerOnly", "variableChance" }) {
-                if (Boolean.TRUE.equals(get(drop, flag))) out.put(flag, true);
-            }
-            Object enchantable = get(drop, "enchantable");
-            if (enchantable != null) out.put("enchantable", enchantable);
-            Object damages = get(drop, "damages");
-            if (damages instanceof Map<?, ?>map && !map.isEmpty()) {
-                Map<String, Object> copy = new TreeMap<>();
-                for (Map.Entry<?, ?> entry : map.entrySet()) copy.put(String.valueOf(entry.getKey()), entry.getValue());
-                out.put("damages", copy);
-            }
-            Object modifiers = get(drop, "chanceModifiers");
-            if (modifiers instanceof Collection<?>list && !list.isEmpty()) {
-                List<String> names = new ArrayList<>();
-                for (Object modifier : list) names.add(
-                    modifier.getClass()
-                        .getSimpleName());
-                out.put("chanceModifiers", names);
-            }
-            Object extra = get(drop, "additionalInfo");
-            if (extra instanceof Collection<?>list && !list.isEmpty()) out.put("additionalInfo", new ArrayList<>(list));
-            return out;
         }
     }
 

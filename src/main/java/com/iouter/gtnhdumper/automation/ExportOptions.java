@@ -28,6 +28,7 @@ final class ExportOptions {
         Arrays.asList(
             "itemicon",
             "advitempanel",
+            "englishnames",
             "recipes",
             "oreDictionary",
             "fluid",
