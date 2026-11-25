@@ -48,6 +48,7 @@ import com.iouter.gtnhdumper.common.recipe.VendingMachineHandlerRecipe;
 import com.iouter.gtnhdumper.common.recipe.WitcheryCauldronHandlerRecipe;
 import com.iouter.gtnhdumper.common.recipe.base.BaseHandlerRecipe;
 import com.iouter.gtnhdumper.common.utils.ModFilter;
+import com.iouter.gtnhdumper.common.utils.NameSelection;
 import com.iouter.gtnhdumper.common.utils.RecipeFiles;
 import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
 import com.iouter.gtnhdumper.common.utils.Utils;
@@ -289,7 +290,17 @@ public class RecipesDumper extends FilteredDataDumper {
         List<String[]> recipesList = new ArrayList<>();
         ModFilter filter = ModFilter.current();
         Map<String, String> skipped = new LinkedHashMap<>();
+        NameSelection selection = new NameSelection(com.iouter.gtnhdumper.automation.ExportSession.recipeHandlers());
         for (IRecipeHandler handler : GuiUsageRecipe.usagehandlers) {
+            // Decide before creating a query instance, so unselected handlers load nothing.
+            String handlerClass = handler.getClass()
+                .getName();
+            if (!selection.matches(
+                handler.getHandlerId(),
+                handler instanceof TemplateRecipeHandler ? handler.getOverlayIdentifier() : null,
+                handlerClass,
+                Utils.getAfterLastDot(handlerClass),
+                handler.getRecipeName())) continue;
             if (handler instanceof TemplateRecipeHandler prototype)
                 handler = com.iouter.gtnhdumper.common.utils.NEIHandlerInstances.create(prototype);
             final String name = handler.getRecipeName();
@@ -339,6 +350,9 @@ public class RecipesDumper extends FilteredDataDumper {
                 GTNHDumper.LOG.error(e);
             }
         }
+        // Logged as an error so the task fails: a mistyped handler name must not look like an empty export.
+        if (!selection.unmatched()
+            .isEmpty()) GTNHDumper.LOG.error("No recipe handler matches: " + selection.unmatched());
         if (filter.isActive()) {
             File report = filter.outputFile("recipes_filter_report.json");
             try {

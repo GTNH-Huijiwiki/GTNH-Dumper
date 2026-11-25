@@ -84,6 +84,7 @@ public final class ExportSession {
     private volatile boolean lifecycleComplete;
     private final boolean imageDiagnostics;
     private final Set<String> imageKeys = new LinkedHashSet<>();
+    private final Set<String> recipeHandlers = new LinkedHashSet<>();
     private ItemIconDumper pendingIcons;
     private boolean iconsReady;
     private Throwable iconFailure;
@@ -137,14 +138,11 @@ public final class ExportSession {
         filter = ModFilter.resolve(options.modFilter);
         imageDiagnostics = request.has("imageDiagnostics") && request.get("imageDiagnostics")
             .getAsBoolean();
-        if (request.has("imageKeys")) {
-            for (com.google.gson.JsonElement key : request.getAsJsonArray("imageKeys")) {
-                String value = key.getAsString();
-                if (value.isEmpty()) throw new IllegalArgumentException("Empty image key");
-                imageKeys.add(value);
-            }
-            if (imageKeys.isEmpty()) throw new IllegalArgumentException("imageKeys must not be empty");
-        }
+        readSelection(request, "imageKeys", imageKeys);
+        readSelection(request, "recipeHandlers", recipeHandlers);
+        // A selection writes a partial itemicon.json or recipe tree; it must never replace the reusable full export.
+        if (options.latest() && !(imageKeys.isEmpty() && recipeHandlers.isEmpty()))
+            throw new IllegalArgumentException("imageKeys and recipeHandlers require outputMode timestamp");
         seed = request.has("seed") ? request.get("seed")
             .getAsLong() : 290002L;
         imageMetadata = !options.noImages && request.has("imageMetadata") ? new File(
@@ -183,6 +181,18 @@ public final class ExportSession {
             GTNHDumper.GSON.toJson(request)
                 .getBytes(StandardCharsets.UTF_8));
         status("WAIT_MENU", "Waiting for main menu");
+    }
+
+    /** An optional non-empty list of names or {@code *} patterns that narrows one task to a few entries. */
+    private static void readSelection(JsonObject request, String name, Set<String> target) {
+        if (!request.has(name)) return;
+        for (com.google.gson.JsonElement entry : request.getAsJsonArray(name)) {
+            String value = entry.getAsString()
+                .trim();
+            if (value.isEmpty()) throw new IllegalArgumentException("Empty entry in " + name);
+            target.add(value);
+        }
+        if (target.isEmpty()) throw new IllegalArgumentException(name + " must not be empty");
     }
 
     public static void register() {
@@ -286,6 +296,10 @@ public final class ExportSession {
 
     public static Set<String> imageKeys() {
         return isExporting() ? Collections.unmodifiableSet(active.imageKeys) : Collections.emptySet();
+    }
+
+    public static Set<String> recipeHandlers() {
+        return isExporting() ? Collections.unmodifiableSet(active.recipeHandlers) : Collections.emptySet();
     }
 
     public static File imageMetadata() {

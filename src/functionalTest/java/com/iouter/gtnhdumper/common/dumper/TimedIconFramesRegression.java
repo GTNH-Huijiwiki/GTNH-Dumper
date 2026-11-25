@@ -8,7 +8,29 @@ public final class TimedIconFramesRegression {
     public static void main(String[] args) {
         com.iouter.gtnhdumper.common.utils.SpriteAnimationRegression.main(args);
         checkProfiles();
+        checkTickLoops();
         checkFrameStrip();
+    }
+
+    private static void checkTickLoops() {
+        GtTickAnimation spin = GtTickAnimation
+            .forRenderer("gregtech.common.render.items.TranscendentalMetaItemRenderer");
+        GtTickAnimation gaia = GtTickAnimation.forRenderer("gregtech.common.render.items.GaiaSpiritRenderer");
+        if (GtTickAnimation.forRenderer("gregtech.common.render.items.GeneratedMaterialRenderer") != null)
+            throw new AssertionError("Still renderer treated as animated");
+        GtTickAnimation.Loop plain = spin.loop(1);
+        if (plain.frameCount != 103 || plain.tickAt(0) != 0 || Math.abs(plain.tickAt(103) * 3.5 - 360) > 1e-9)
+            throw new AssertionError("One turn per loop expected");
+        // A texture animation of its own: whole texture periods, whole effect cycles.
+        checkLoop(gaia.loop(182), 182, 180);
+        checkLoop(spin.loop(90), 90, 720.0 / 7);
+        checkLoop(gaia.loop(8), 184, 180);
+        checkLoop(gaia.loop(500), 500, 540);
+    }
+
+    private static void checkLoop(GtTickAnimation.Loop loop, int frames, double ticks) {
+        if (loop.frameCount != frames || Math.abs(loop.tickAt(frames) - ticks) > 1e-9)
+            throw new AssertionError("Loop " + loop.frameCount + " frames over " + loop.tickAt(loop.frameCount));
     }
 
     private static void checkProfiles() {

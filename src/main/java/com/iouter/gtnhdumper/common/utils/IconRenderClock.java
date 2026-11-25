@@ -40,6 +40,11 @@ public final class IconRenderClock {
     private static boolean worldSaved;
     private static String failure;
     private static int resetSprites;
+    private static int uncachedModelRenders;
+    /** Pulse sizes by animation frame, as standard normal samples. Frame 0, also the still icon, is the mean. */
+    private static final double[] PULSES = pulses();
+    private static int effectFrame;
+    private static int fixedPulses;
     /** Saved values of mod animation counters: field, owner (null when static), original value. */
     private static final java.util.List<Object[]> savedCounters = new java.util.ArrayList<>();
     private static final Map<String, String> counterFailures = new LinkedHashMap<>();
@@ -70,6 +75,9 @@ public final class IconRenderClock {
     public static synchronized void freeze() {
         if (frozen) return;
         failure = null;
+        uncachedModelRenders = 0;
+        fixedPulses = 0;
+        effectFrame = 0;
         Minecraft minecraft = Minecraft.getMinecraft();
         try {
             if (minecraft.theWorld != null) {
@@ -119,6 +127,38 @@ public final class IconRenderClock {
         savedCounters.clear();
     }
 
+    /**
+     * Moves GT's frozen animation counter, which spinning and colour-cycling item renderers read, so their frames can
+     * be stepped through. {@link #restoreGtAnimationTick} puts the frozen value back.
+     */
+    public static synchronized void setGtAnimationTick(double tick) {
+        long whole = (long) Math.floor(tick);
+        setGtCounters(whole, (float) (tick - whole));
+    }
+
+    public static synchronized void restoreGtAnimationTick() {
+        setGtCounters(WORLD_TIME, 0f);
+    }
+
+    private static void setGtCounters(long tick, float partial) {
+        int found = 0;
+        for (Object[] saved : savedCounters) {
+            java.lang.reflect.Field field = (java.lang.reflect.Field) saved[0];
+            if (!field.getDeclaringClass()
+                .getName()
+                .equals("gregtech.common.GTClient")) continue;
+            try {
+                if (field.getName()
+                    .equals("mAnimationTick")) field.setLong(saved[1], tick);
+                else field.setFloat(saved[1], partial);
+                found++;
+            } catch (IllegalAccessException error) {
+                throw new IllegalStateException(error);
+            }
+        }
+        if (found != 2) throw new IllegalStateException("GT animation counters are not frozen: " + counterFailures);
+    }
+
     private static void freezeCounters() {
         savedCounters.clear();
         counterFailures.clear();
@@ -145,6 +185,35 @@ public final class IconRenderClock {
             }
         }
         frozenCounters = savedCounters.size();
+    }
+
+    /** The animation frame being rendered, for effects that would otherwise draw a new random value each time. */
+    public static void setEffectFrame(int frame) {
+        effectFrame = frame;
+    }
+
+    /** {@code Random.nextGaussian()} for redirected pulse effects: fixed per animation frame while exporting icons. */
+    public static double pulseGaussian(java.util.Random random) {
+        if (!frozen) return random.nextGaussian();
+        fixedPulses++;
+        return PULSES[Math.floorMod(effectFrame, PULSES.length)];
+    }
+
+    private static double[] pulses() {
+        double[] pulses = new double[4096];
+        // One stream: the first values of consecutively seeded generators are strongly correlated.
+        java.util.Random random = new java.util.Random(SYSTEM_TIME);
+        for (int i = 1; i < pulses.length; i++) pulses[i] = random.nextGaussian();
+        return pulses;
+    }
+
+    /**
+     * True while exporting icons, so a mod's order-dependent inventory model cache is not used; counted for the report.
+     */
+    public static boolean bypassInventoryModelCache() {
+        if (!frozen) return false;
+        uncachedModelRenders++;
+        return true;
     }
 
     /** {@code System.currentTimeMillis()} for redirected item renderers. */
@@ -198,6 +267,8 @@ public final class IconRenderClock {
         report.put("systemTime", SYSTEM_TIME);
         report.put("worldTime", WORLD_TIME);
         report.put("partialTicks", 0);
+        report.put("uncachedGtModelRenders", uncachedModelRenders);
+        report.put("fixedRandomPulses", fixedPulses);
         report.put("failure", failure);
         return report;
     }

@@ -24,6 +24,14 @@
   只重新渲染这两个实体的图片，其余图片与 entity-images.json 的其它条目保持不变。
 
 .EXAMPLE
+  .\scripts\export.ps1 -Build -Items 'gregtech:gt.blockmachines:1000,EnderIO:item*Conduit*'
+  调试：只渲染选中物品的图标（短键，* 通配）。写到独立的 dumper-runs\debug-<时间>，latest 不受影响。
+
+.EXAMPLE
+  .\scripts\export.ps1 -Handlers 'GTNEIDefaultHandler,*Forestry*'
+  调试：只导出选中的 NEI 配方处理器（匹配处理器 ID、overlay ID、类名或标题，* 通配），同样写到 debug 目录。
+
+.EXAMPLE
   .\scripts\export.ps1 englishnames
   只用 en_US 启动导出英文名（写到 dumper-runs\englishnames.json）。
 
@@ -49,7 +57,10 @@ param(
     [switch] $DryRun,    # 只显示会做什么
     [switch] $SkipEnglishNames, # 全量导出时不先用 en_US 跑一次英文名（少启动一次游戏，但 CropsNH 等机器的英文名会是中文）
     [string] $Jar,       # 指定 jar，覆盖 DUMPER_JAR 与 build\libs
-    [string] $Entities   # 只重新导出这些实体的图片（逗号分隔注册名），要与任务 entityimages 一起用；其余图片与记录原样保留
+    [string] $Entities,  # 只重新导出这些实体的图片（逗号分隔注册名），要与任务 entityimages 一起用；其余图片与记录原样保留
+    [string] $Items,     # 调试：只导出这些物品的图标（逗号分隔短键，* 通配）
+    [string] $Handlers,  # 调试：只导出这些 NEI 配方处理器（逗号分隔，* 通配）
+    [switch] $Diagnostics # 在 icon-capture-report.json 记录渲染器与 GL 状态，配合 -Items 用
 )
 
 $ErrorActionPreference = 'Stop'
@@ -144,6 +155,21 @@ foreach ($task in $Tasks) {
         throw "没有这个任务：$task。可用：$($taskNames -join ', ')"
     }
 }
+# 调试导出：只做选中的物品图标或配方处理器，写到独立目录，latest 保持原样。
+$itemKeys = @($Items -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$handlerNames = @($Handlers -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$selection = $itemKeys.Count -gt 0 -or $handlerNames.Count -gt 0
+if ($Diagnostics -and $itemKeys.Count -eq 0) { throw '-Diagnostics 要和 -Items 一起用。' }
+if ($selection) {
+    $implied = @()
+    if ($itemKeys.Count -gt 0) { $implied += 'itemicon' }
+    if ($handlerNames.Count -gt 0) { $implied += 'recipes' }
+    $extra = @($Tasks | Where-Object { $implied -notcontains $_ })
+    if ($extra.Count -gt 0) { throw "-Items / -Handlers 不能和这些任务一起用：$($extra -join ', ')" }
+    $Tasks = $implied
+    $debugRunId = 'debug-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+    $dumps = Join-Path (Join-Path $runs $debugRunId) 'dumps'
+}
 $full = $Tasks.Count -eq 0
 if (-not (Test-Path $prismExe)) { throw "找不到 Prism：$prismExe（设置 PRISM_EXE）。" }
 if (-not $DryRun -and (Get-GameProcess)) { throw '游戏正在运行（别的导出或你自己开着），先关掉再导出。' }
@@ -215,9 +241,11 @@ function Invoke-GameRun([System.Collections.IDictionary]$Request, [string]$Langu
     if (-not $instance) { throw '启动需要 PRISM_INSTANCE。' }
     New-Item -ItemType Directory -Force (Split-Path $config) | Out-Null
     Set-GameLanguage $Language
-    Set-Content -LiteralPath $config -Value $json -Encoding ASCII
+    # 无 BOM 的 UTF-8：配方处理器可以按中文标题选择。
+    [IO.File]::WriteAllText($config, $json, (New-Object Text.UTF8Encoding $false))
     $startedMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-    $statusFile = Join-Path $latest 'status.json'
+    $runDir = if ($Request['outputMode'] -eq 'latest') { $latest } else { Join-Path $runs $Request['runId'] }
+    $statusFile = Join-Path $runDir 'status.json'
     try {
         Start-Process $prismExe -ArgumentList @('--launch', $instance, '--offline', $account) -WindowStyle Hidden
         $game = $null
@@ -256,6 +284,7 @@ function Invoke-GameRun([System.Collections.IDictionary]$Request, [string]$Langu
 }
 
 Write-Host "输出：$dumps"
+if ($selection) { Write-Host '调试导出：latest 目录不受影响。' }
 Write-Host "PNG 缓存：$cacheDir"
 
 # ── 第一步：en_US 导出英文名 ───────────────────────────────────────────
@@ -274,6 +303,13 @@ if ($englishOnly) { return }
 # ── 第二步：主导出 ─────────────────────────────────────────────────────
 $request = [ordered]@{ enabled = $true; outputMode = 'latest'; exitGame = $true; pngCacheDir = $cacheDir }
 if ($full) { $request['noImages'] = [bool]$NoImages } else { $request['tasks'] = $Tasks }
+if ($selection) {
+    $request['outputMode'] = 'timestamp'
+    $request['runId'] = $debugRunId
+    if ($itemKeys.Count -gt 0) { $request['imageKeys'] = $itemKeys }
+    if ($handlerNames.Count -gt 0) { $request['recipeHandlers'] = $handlerNames }
+    if ($Diagnostics) { $request['imageDiagnostics'] = $true }
+}
 $entityIds = @($Entities -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if ($entityIds.Count -gt 0) {
     if ($Tasks.Count -ne 1 -or $Tasks[0] -ne 'entityimages') { throw '-Entities 必须配合且只配合任务 entityimages' }
@@ -298,4 +334,4 @@ if ($full -and (Test-Path $latest)) {
     Remove-Safely $latest $runs
 }
 $s = Invoke-GameRun $request $gameLanguage '主导出'
-if ($s) { Write-Host "数据目录（工具链的 DUMPS_DIR）：$dumps" }
+if ($s) { Write-Host "$(if ($selection) { '调试输出（不要给工具链用）' } else { '数据目录（工具链的 DUMPS_DIR）' })：$dumps" }

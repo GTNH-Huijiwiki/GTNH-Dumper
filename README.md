@@ -202,6 +202,21 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 
 其他开关：`-Build`、`-NoImages`（全量时跳过物品图标）、`-SkipEnglishNames`（全量时不先跑英文名）、`-DryRun`（只显示会做什么）、`-Jar <路径>`。
 
+**调试导出（只做选中的条目）**：改渲染或某个配方适配器时，不用跑完整导出。
+
+```powershell
+.\scripts\export.ps1 -Build -Items 'gregtech:gt.blockmachines:1000,EnderIO:item*Conduit*'   # 只画这些物品的图标
+.\scripts\export.ps1 -Build -Handlers 'NEIHandlerCarpenter,*ForestryHandler*'              # 只导出这些配方处理器
+.\scripts\export.ps1 -Items 'gregtech:gt.metaitem.01:32600' -Diagnostics                   # 附带渲染器与 GL 状态记录
+```
+
+- `-Items` 匹配物品短键；`-Handlers` 匹配处理器 ID、overlay ID、完整类名、简单类名或标题。逗号分隔，忽略大小写，`*` 匹配任意文字，
+  每一项都要整名匹配。没有匹配到任何东西的项会让导出失败，避免拼错时得到一份看似正常的空结果。
+- 结果写到独立的 `dumper-runs\debug-<时间>\dumps`，`latest` 保持原样；产物只含选中条目，不要给工具链用。`-Clean` 一并删除。
+- `-Items` 仍要先做配方物品扫描（约 2～3 分钟，保证带 NBT 的变体能选到）；`-Handlers` 单独使用时不需要。
+- 对应自动导出配置的 `imageKeys`、`recipeHandlers`，两者要求 `outputMode: "timestamp"`。
+- 选中少量物品时渲染顺序与完整导出不同，依赖渲染先后顺序的问题只能在完整导出（或 `-Items '*'`）里复现。
+
 **语言与英文名**：全量导出先用 `en_US` 启动一次，只导出英文名（`englishnames` 任务，几分钟），再用 `GAME_LANGUAGE`
 （`.env`，默认 `zh_CN`）做主导出。脚本在每次启动前把实例 `options.txt` 的 `lang` 写成对应语言，结束后还原；
 实际语言与预期不符时报错。原因：有些模组在加载时按启动语言把名字写死（如 CropsNH 机器把翻译后的名字传给 GT），
@@ -284,7 +299,9 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
   模组自己的动画计数器也固定（GT `mAnimationTick`、植物魔法 `ticksInGame`、神秘工匠 `elapsedTicks`，`frozenCounters` 记录数量）；
   直接读系统时间的物品渲染器由 `mixins/clock/` 改读冻结时钟（林业蝴蝶与蜜蜂、龙研地球、Gadomancy 节点与使魔、
   巫术小玩意原初手套、GT 故障特效），只在导出图标期间生效；渲染时新建的生物（生物灵魂、刷怪笼、奖杯）随机数和 UUID 按类名固定。
-  直接读系统时间或随机数的渲染器仍会每次不同，由工具链比较两次导出的 `icon-hashes.json` 记为不稳定图标。
+  GT、Avaritia 与永恒奇点的光晕脉冲每次渲染取一个随机大小，导出时改为按动画帧号取固定值（第 0 帧为均值，
+  `fixedRandomPulses` 记录次数）：帧间仍然闪动，两次导出一致。
+  其余直接读系统时间或随机数的渲染器仍会每次不同，由工具链比较两次导出的 `icon-hashes.json` 记为不稳定图标。
 
 这些设置可以用 JVM 参数调整：
 
@@ -376,9 +393,21 @@ EOH 等自定义配方及其他无法确定该标志的配方省略此字段，�
 ### 定向图片与时钟动画
 
 `imagesOnly: true` 仅运行配方物品扫描和图标导出，不导出其他数据库。
-可配合 `imageKeys` 指定完整 `shortKey` 数组；未找到的 key 会报告失败。
+可配合 `imageKeys` 指定 `shortKey` 数组（支持 `*` 通配）；未匹配到的项会报告失败。要求 `outputMode: "timestamp"`。
 例如 `{"enabled":true,"imagesOnly":true,"imageKeys":["minecraft:diamond"]}`。
 `imageDiagnostics: true` 在 `icon-capture-report.json` 记录渲染器、非透明像素数、NBT 和 FBO 前后的 GL 状态，供定向图片诊断使用。
+
+动图的来源有三种：
+
+- **贴图图集动画**：按 `.mcmeta` 的帧序与时长逐 tick 上传。带 `interpolate: true` 的贴图在游戏里由 Angelica 的
+  `InterpolatedIcon` 在相邻两帧间渐变（1.7.10 原版没有这个功能），导出按同样的算法生成中间帧；是否渐变取决于运行中的贴图类。
+- **GT 动画计数器**：超时空金属的零件与部件绕轴旋转，盖亚之魂、棱彩硅岩按色相循环。它们没有动画贴图，
+  导出时按 GT 实际选用的渲染器识别，逐帧推进 `mAnimationTick`（帧长 64×64，一帧约 1 tick）。静态图是未旋转的第 0 帧。
+- **墙钟时间**：GT 超立方体，见下。
+
+静态图一律用 256×256 直接渲染第一帧。动画帧在能够无损放大回静态图时保持贴图分辨率（平面像素图即如此）；
+自定义渲染器用小贴图画立方体、旋转或多层图形时，按贴图分辨率渲染会得到锯齿缩略图，这时提高到 32、64 或 128。
+提高过分辨率的动画记在 `icon-performance.json` 的 `detailAnimations`。
 
 GT 两种超立方体由客户端 RenderTick 同时按 50 ms 目标间隔采样 120 帧，动态帧为 64×64，静态图另以 256×256 渲染。
 实际采样时间记录在诊断文件中；低帧率会影响间隔。动画仍使用现有 `frameCount`、`size` 和 `_dynamic.png` 横向帧条格式，PNG 使用最大压缩。
@@ -387,6 +416,8 @@ GT 两种超立方体由客户端 RenderTick 同时按 50 ms 目标间隔采样 
 
 Amazing Trophies 的方块结构奖杯默认用 VBO 绘制，模型在首次渲染时构建并缓存；在导出图标时构建，几何体每次运行都会带上不同的偏移，结构偏离底座。
 导出图标前改用该模组的普通渲染器（与 `-Damazingtrophies.disableVBO=true` 相同），逐帧绘制方块。
+GT 按机器编号缓存库存模型，而奖杯用跳过遮挡面的方块渲染器画结构里的机器；导出图标期间停用这个缓存
+（`uncachedGtModelRenders` 记录次数），否则先在奖杯里出现过的机器图标会缺面。
 
 特殊物品的选择规则和参数集中在 `ItemIconRenderProfile`，按注册名与 damage 选择，同一物品的 NBT 变体使用相同配置。
 定时采样与关闭面剔除分别配置；超立方体在绘制期间关闭剔除，以保留 Angelica 将宽线展开成的三角形，随后恢复原状态。
