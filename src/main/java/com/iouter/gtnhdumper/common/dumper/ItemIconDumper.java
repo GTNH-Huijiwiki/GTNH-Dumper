@@ -42,6 +42,7 @@ import com.iouter.gtnhdumper.common.utils.DynamicTexture;
 import com.iouter.gtnhdumper.common.utils.FBOHelper;
 import com.iouter.gtnhdumper.common.utils.IconRenderClock;
 import com.iouter.gtnhdumper.common.utils.ModFilter;
+import com.iouter.gtnhdumper.common.utils.NameSelection;
 import com.iouter.gtnhdumper.common.utils.PngWriter;
 import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
 import com.iouter.gtnhdumper.common.utils.Utils;
@@ -63,6 +64,11 @@ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 public class ItemIconDumper extends WikiDumper {
 
     private static final int SINGLE_FRAME_SIZE = 256;
+    /** Animation frame size for icons that cannot be drawn at their texture resolution without loss. */
+    private static final int DETAIL_FRAME_SIZE = 128;
+    private static final long MAX_STRIP_WIDTH = 65536;
+    /** Animations rendered above their texture resolution: file name to "texture->frame" sizes. */
+    private static final Map<String, String> detailAnimations = new LinkedHashMap<>();
     private static final Object2IntOpenHashMap<ItemStack> frameCountMap = new Object2IntOpenHashMap<>();
     private static final Object2IntOpenHashMap<ItemStack> dynamicSizeMap = new Object2IntOpenHashMap<>();
     private static final Map<Integer, FBOHelper> fbos = new HashMap<>();
@@ -95,17 +101,16 @@ public class ItemIconDumper extends WikiDumper {
         captureReport.clear();
         try {
             selectedStacks = new ArrayList<>();
-            Set<String> keys = ExportSession.imageKeys();
-            Set<String> missing = new HashSet<>(keys);
+            NameSelection keys = new NameSelection(ExportSession.imageKeys());
             Map<String, ItemStack> timed = new LinkedHashMap<>();
             for (ItemStack stack : AllItemStacks.getFilteredItemStacks()) {
                 String key = Utils.getItemStackShortKey(stack);
-                if (!keys.isEmpty() && !keys.contains(key)) continue;
-                missing.remove(key);
+                if (!keys.matches(key)) continue;
                 selectedStacks.add(stack);
                 if (ItemIconRenderProfile.forStack(stack).sampling != null) timed.putIfAbsent(key, stack.copy());
             }
-            if (!missing.isEmpty()) throw new IllegalArgumentException("Unknown imageKeys: " + missing);
+            if (!keys.unmatched()
+                .isEmpty()) throw new IllegalArgumentException("Unknown imageKeys: " + keys.unmatched());
             if (ExportSession.imageMetadata() != null || timed.isEmpty()) {
                 success.run();
                 return;
@@ -257,6 +262,7 @@ public class ItemIconDumper extends WikiDumper {
         resumedIcons = 0;
         unregisteredItems.clear();
         renderFailures.clear();
+        detailAnimations.clear();
         resume = null;
         File resumeFile = ExportSession.imageResume();
         if (resumeFile != null) {
@@ -285,6 +291,7 @@ public class ItemIconDumper extends WikiDumper {
             metrics.put("resumedIcons", resumedIcons);
             metrics.put("excludedUnregisteredItems", unregisteredItems);
             metrics.put("renderFailures", renderFailures.size());
+            metrics.put("detailAnimations", new LinkedHashMap<>(detailAnimations));
             synchronized (OVERSIZED_ANIMATIONS) {
                 metrics.put("oversizedAnimations", new LinkedHashMap<>(OVERSIZED_ANIMATIONS));
             }
@@ -651,8 +658,8 @@ public class ItemIconDumper extends WikiDumper {
             }
         }
         BufferedImage image = fbo.saveToImage();
-        if (pending != null && (ItemIconRenderProfile.forStack(itemStack).sampling != null || !ExportSession.imageKeys()
-            .isEmpty())) {
+        if (pending != null
+            && (ItemIconRenderProfile.forStack(itemStack).sampling != null || ExportSession.imageDiagnostics())) {
             String key = Utils.getItemStackShortKey(itemStack);
             if (image.getWidth() == SINGLE_FRAME_SIZE || !pending.captureReport.containsKey(key)) {
                 Map<String, Object> diagnostic = new LinkedHashMap<>();
@@ -688,10 +695,16 @@ public class ItemIconDumper extends WikiDumper {
 
     private static void renderGeneralItem(ItemStack itemStack, FBOHelper fbo, RenderItem itemRenderer,
         String staticName, String dynamicName) {
+        GtTickAnimation tickAnimation = GtTickAnimation.forStack(itemStack);
         DynamicTexture dynamicTexture = new DynamicTexture(itemStack);
         // Prismarine animations have thousands of frames (6600 for the wall); export them as still images.
-        boolean dynamic = !staticName.startsWith("icon_Botania_prismarine") && dynamicTexture.isDynamic();
+        boolean dynamic = tickAnimation != null
+            || !staticName.startsWith("icon_Botania_prismarine") && dynamicTexture.isDynamic();
         if (resumeItem(itemStack, dynamic, staticName, dynamicName)) return;
+        if (tickAnimation != null) {
+            renderTickAnimation(itemStack, itemRenderer, tickAnimation, dynamicTexture, staticName, dynamicName);
+            return;
+        }
         if (dynamic) {
             renderDynamicItem(itemStack, itemRenderer, dynamicTexture, staticName, dynamicName);
             return;
@@ -763,8 +776,23 @@ public class ItemIconDumper extends WikiDumper {
     private static void renderDynamicItem(ItemStack itemStack, RenderItem itemRenderer, DynamicTexture dynamicTexture,
         String staticName, String dynamicName) {
         int frameCount = dynamicTexture.lcm;
-        boolean is3dBlockItem = is3dBlockItem(itemStack);
-        int frameSize = is3dBlockItem ? SINGLE_FRAME_SIZE : getDynamicTextureSize(dynamicTexture);
+        // The still icon is the first frame at full size, not an enlarged animation frame.
+        BufferedImage still;
+        int frameSize = SINGLE_FRAME_SIZE;
+        try {
+            dynamicTexture.uploadFrame(0);
+            still = renderItem(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer, 1f, null);
+            if (!is3dBlockItem(itemStack)) frameSize = chooseFrameSize(
+                still,
+                getDynamicTextureSize(dynamicTexture),
+                frameCount,
+                size -> renderItem(itemStack, getFbo(size), itemRenderer, 1f, null));
+        } finally {
+            dynamicTexture.restore();
+            getFbo(SINGLE_FRAME_SIZE).restoreTexture();
+        }
+        if (frameSize != SINGLE_FRAME_SIZE && frameSize != getDynamicTextureSize(dynamicTexture))
+            detailAnimations.put(staticName, getDynamicTextureSize(dynamicTexture) + "->" + frameSize);
         long stripBytes = (long) frameCount * frameSize * frameSize * 4L;
         // The strip spans the least common multiple of all animation lengths and can exceed the heap.
         // Frames and the strip are both held, so peak use is about twice this limit.
@@ -778,7 +806,6 @@ public class ItemIconDumper extends WikiDumper {
             synchronized (OVERSIZED_ANIMATIONS) {
                 OVERSIZED_ANIMATIONS.put(staticName, frameCount + "x" + frameSize + "px=" + (stripBytes >> 20) + "MB");
             }
-            BufferedImage still = renderItem(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer, 1f, null);
             FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
             return;
         }
@@ -787,18 +814,90 @@ public class ItemIconDumper extends WikiDumper {
         try {
             for (int i = 0; i < frameCount; i++) {
                 dynamicTexture.uploadFrame(i);
+                IconRenderClock.setEffectFrame(i);
                 images[i] = renderItem(itemStack, dynamicFbo, itemRenderer, 1f, null);
             }
         } finally {
+            IconRenderClock.setEffectFrame(0);
             dynamicTexture.restore();
             dynamicFbo.restoreTexture();
         }
-        BufferedImage image = concatenateImages(images, false);
-        frameCountMap.put(itemStack, image.getWidth() / image.getHeight());
-        dynamicSizeMap.put(itemStack, image.getHeight());
-        FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), resizeImage(images[0], SINGLE_FRAME_SIZE));
-        FBOHelper.saveToFile(iconOutputFile("icons/" + dynamicName), image);
+        FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
+        saveStrip(itemStack, images, dynamicName);
         dynamicFbo.restoreTexture();
+    }
+
+    private static void saveStrip(ItemStack itemStack, BufferedImage[] frames, String dynamicName) {
+        BufferedImage strip = concatenateImages(frames, false);
+        frameCountMap.put(itemStack, strip.getWidth() / strip.getHeight());
+        dynamicSizeMap.put(itemStack, strip.getHeight());
+        FBOHelper.saveToFile(iconOutputFile("icons/" + dynamicName), strip);
+    }
+
+    private static void renderTickAnimation(ItemStack itemStack, RenderItem itemRenderer, GtTickAnimation animation,
+        DynamicTexture texture, String staticName, String dynamicName) {
+        // Some of these also have an animated texture of their own; both advance together.
+        GtTickAnimation.Loop loop = animation.loop(texture.isDynamic() ? texture.lcm : 1);
+        if ((long) loop.frameCount * GtTickAnimation.FRAME_SIZE > MAX_STRIP_WIDTH)
+            throw new IllegalStateException("Animation of " + staticName + " needs " + loop.frameCount + " frames");
+        FBOHelper frameFbo = getFbo(GtTickAnimation.FRAME_SIZE);
+        BufferedImage[] frames = new BufferedImage[loop.frameCount];
+        BufferedImage still;
+        try {
+            for (int i = 0; i < frames.length; i++) {
+                if (texture.isDynamic()) texture.uploadFrame(i);
+                IconRenderClock.setGtAnimationTick(loop.tickAt(i));
+                IconRenderClock.setEffectFrame(i);
+                frames[i] = renderItem(itemStack, frameFbo, itemRenderer, 1f, null);
+            }
+            if (texture.isDynamic()) texture.uploadFrame(0);
+            IconRenderClock.setGtAnimationTick(0);
+            IconRenderClock.setEffectFrame(0);
+            still = renderItem(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer, 1f, null);
+        } finally {
+            IconRenderClock.setEffectFrame(0);
+            if (texture.isDynamic()) texture.restore();
+            IconRenderClock.restoreGtAnimationTick();
+            frameFbo.restoreTexture();
+        }
+        FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
+        // GT's client settings can turn these effects off; then there is nothing to animate.
+        if (!deduplicateByPixel(frames)) saveStrip(itemStack, frames, dynamicName);
+        frameFbo.restoreTexture();
+    }
+
+    /**
+     * Picks the animation frame size. Flat sprites lose nothing at their texture resolution: enlarged with nearest
+     * neighbour they equal the full-size render, so that small size is kept. Custom renderers that draw cubes, rotated
+     * or layered shapes through the same textures do not, and would turn into jagged thumbnails; they get more pixels.
+     */
+    static int chooseFrameSize(BufferedImage fullSize, int textureSize, int frameCount,
+        java.util.function.IntFunction<BufferedImage> render) {
+        for (int size : new int[] { textureSize, 32, 64 }) {
+            if (size < textureSize || size >= DETAIL_FRAME_SIZE) continue;
+            if (reproduces(fullSize, render.apply(size))) return size;
+        }
+        int size = Math.max(textureSize, DETAIL_FRAME_SIZE);
+        // Wider strips than this are shown as still images by the wiki.
+        while (size / 2 >= Math.max(textureSize, 32) && (long) size * frameCount > MAX_STRIP_WIDTH) size /= 2;
+        return size;
+    }
+
+    private static boolean reproduces(BufferedImage fullSize, BufferedImage small) {
+        int side = fullSize.getWidth();
+        int[] expected = fullSize.getRGB(0, 0, side, side, null, 0, side);
+        int[] actual = resizeImage(small, side).getRGB(0, 0, side, side, null, 0, side);
+        // A few edge pixels may round differently between viewport sizes.
+        int allowed = expected.length / 1000;
+        for (int i = 0; i < expected.length; i++) {
+            if (expected[i] == actual[i] || (expected[i] >>> 24) == 0 && (actual[i] >>> 24) == 0) continue;
+            for (int shift = 0; shift < 32; shift += 8)
+                if (Math.abs((expected[i] >>> shift & 0xff) - (actual[i] >>> shift & 0xff)) > 8) {
+                    if (--allowed < 0) return false;
+                    break;
+                }
+        }
+        return true;
     }
 
     private static boolean is3dBlockItem(ItemStack itemStack) {

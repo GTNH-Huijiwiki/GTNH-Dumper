@@ -90,11 +90,18 @@ public class DynamicTexture {
                 .getTextureManager()
                 .bindTexture(atlas);
             for (TextureAtlasSprite texture : textures) {
-                int frame = restore ? originalFrames.get(texture)
-                    : timelines.get(texture)
-                        .frameAt(tick);
+                int[][] data;
+                if (restore) data = texture.getFrameTextureData(originalFrames.get(texture));
+                else {
+                    SpriteAnimationTimeline.Position position = timelines.get(texture)
+                        .positionAt(tick);
+                    data = texture.getFrameTextureData(position.frame);
+                    if (position.progress > 0 && position.nextFrame != position.frame && isInterpolated(texture))
+                        data = SpriteAnimationTimeline
+                            .blend(data, texture.getFrameTextureData(position.nextFrame), position.progress);
+                }
                 TextureUtil.uploadTextureMipmap(
-                    texture.getFrameTextureData(frame),
+                    data,
                     texture.getIconWidth(),
                     texture.getIconHeight(),
                     texture.getOriginX(),
@@ -105,6 +112,17 @@ public class DynamicTexture {
         } finally {
             GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture);
         }
+    }
+
+    /**
+     * Whether the game cross-fades this sprite between stored frames. 1.7.10 itself does not; Angelica replaces sprites
+     * whose {@code .mcmeta} asks for interpolation with its own sprite class, which is checked by name so the dumper
+     * follows whatever the running client does.
+     */
+    private static boolean isInterpolated(TextureAtlasSprite texture) {
+        for (Class<?> type = texture.getClass(); type != null; type = type.getSuperclass()) if (type.getName()
+            .equals("jss.notfine.render.InterpolatedIcon")) return true;
+        return false;
     }
 
     private static TextureAtlasSprite[] getTextures(ItemStack stack) {

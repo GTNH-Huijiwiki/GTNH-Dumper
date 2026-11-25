@@ -10,6 +10,7 @@ public final class SpriteAnimationRegression {
 
     public static void main(String[] args) {
         animations();
+        interpolation();
         textures();
         EnderIOMixinLoader loader = new EnderIOMixinLoader();
         check(
@@ -48,6 +49,20 @@ public final class SpriteAnimationRegression {
             new SpriteAnimationTimeline(new int[] { 0 }, new int[] { 0 });
             throw new AssertionError("Invalid frame duration accepted");
         } catch (IllegalArgumentException expectedError) {}
+    }
+
+    private static void interpolation() {
+        SpriteAnimationTimeline timeline = new SpriteAnimationTimeline(new int[] { 0, 1 }, new int[] { 4, 4 });
+        SpriteAnimationTimeline.Position position = timeline.positionAt(5);
+        check(
+            position.frame == 1 && position.nextFrame == 0 && position.progress == 0.25,
+            "Position inside a frame, wrapping to the first");
+        int[][] from = { { 0xffff0000, 0x00000000 } };
+        int[][] to = { { 0xff0000ff, 0xff00ff00 } };
+        int[][] half = SpriteAnimationTimeline.blend(from, to, 0.5);
+        check(half[0][0] == 0xff800080, "Opaque pixels cross-fade");
+        check(half[0][1] == 0x8000ff00, "Transparent pixels contribute no colour");
+        check(SpriteAnimationTimeline.blend(from, to, 0)[0][0] == 0xffff0000, "The first tick shows the stored frame");
     }
 
     private static void textures() {
