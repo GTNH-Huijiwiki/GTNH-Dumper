@@ -77,6 +77,31 @@ public final class StableOrder {
         return sorted;
     }
 
+    /** 注册表视图按唯一标识排序；元素的哈希随启动而变，原来的迭代顺序每次不同。 */
+    public static <T> Set<T> stableSet(Set<T> elements) {
+        List<T> sorted = new ArrayList<>(elements);
+        sorted.sort(StableOrder::compareElements);
+        return new java.util.LinkedHashSet<>(sorted);
+    }
+
+    private static int compareElements(Object left, Object right) {
+        if (left instanceof ItemStack a && right instanceof ItemStack b) return ITEMS.compare(a, b);
+        return identifier(left).compareTo(identifier(right));
+    }
+
+    private static String identifier(Object element) {
+        if (element instanceof String text) return text;
+        try {
+            return String.valueOf(
+                element.getClass()
+                    .getMethod("getUniqueIdentifier")
+                    .invoke(element));
+        } catch (ReflectiveOperationException noIdentifier) {
+            return element.getClass()
+                .getName();
+        }
+    }
+
     /** 配方列表来自 HashMap/HashSet 或按哈希顺序注册的处理器；按配方 JSON 排序。 */
     private static final Set<String> UNORDERED_RECIPE_SOURCES = new java.util.HashSet<>(
         Arrays.asList(

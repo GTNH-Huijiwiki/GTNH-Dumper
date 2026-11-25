@@ -226,7 +226,9 @@ public class Utils {
     public static String getTooltip(ItemStack itemStack, List<JsonObject> tooltipStats) {
         try {
             List<String> tooltips = itemStack.getTooltip(minecraft.thePlayer, false);
-            return TooltipText.format(tooltips, tooltipStats);
+            return TooltipText.stableLines(
+                Item.itemRegistry.getNameForObject(itemStack.getItem()),
+                TooltipText.format(tooltips, tooltipStats));
         } catch (Exception e) {
             return "ERROR";
         }

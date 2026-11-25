@@ -185,6 +185,43 @@ public class TC4ThaumonomiconDumper extends WikiDumper {
         return result;
     }
 
+    /**
+     * Thaumic Tinkerer's KAMI research requires, as hidden parents, every matching research registered when its pages
+     * were set, so the list depends on which mods registered first. It is completed from the final registry with the
+     * same filter and sorted.
+     */
+    private static String[] hiddenParents(ResearchItem research) {
+        if (!research.getClass()
+            .getName()
+            .equals("thaumic.tinkerer.common.research.KamiResearchItem") || research.isAutoUnlock())
+            return research.parentsHidden;
+        java.util.Set<String> parents = new java.util.TreeSet<>();
+        if (research.parentsHidden != null) parents.addAll(java.util.Arrays.asList(research.parentsHidden));
+        List<?> excludedPrefixes;
+        try {
+            excludedPrefixes = (List<?>) research.getClass()
+                .getField("Blacklist")
+                .get(null);
+        } catch (ReflectiveOperationException error) {
+            throw new IllegalStateException("Thaumic Tinkerer KAMI research changed", error);
+        }
+        List<String> categories = java.util.Arrays
+            .asList("TT_CATEGORY", "BASICS", "GOLEMANCY", "ARTIFICE", "ALCHEMY", "THAUMATURGY");
+        for (thaumcraft.api.research.ResearchCategoryList category : ResearchCategories.researchCategories.values()) {
+            for (ResearchItem other : category.research.values()) {
+                if (other.isLost() || other.isVirtual()
+                    || other.getClass() == research.getClass()
+                    || !categories.contains(other.category)
+                    || other.key.endsWith("KAMI")
+                    || excludedPrefixes.stream()
+                        .anyMatch(prefix -> other.key.startsWith((String) prefix)))
+                    continue;
+                parents.add(other.key);
+            }
+        }
+        return parents.toArray(new String[0]);
+    }
+
     private static Map<String, Object> research(ResearchItem m, String source, ThaumonomiconAssets assets) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("Key", m.key);
@@ -202,7 +239,7 @@ public class TC4ThaumonomiconDumper extends WikiDumper {
         map.put("Complexity", m.getComplexity());
         map.put("Warp", ThaumcraftApi.getWarp(m.key));
         map.put("Parents", m.parents);
-        map.put("ParentsHidden", m.parentsHidden);
+        map.put("ParentsHidden", hiddenParents(m));
         map.put("Siblings", m.siblings);
         // Same fields and values as the former tc4research.json: triggers as localized names.
         map.put("ItemTriggers", getItemStacksName(m.getItemTriggers()));

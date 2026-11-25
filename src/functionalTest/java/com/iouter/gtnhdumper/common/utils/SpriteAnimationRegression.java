@@ -2,6 +2,14 @@ package com.iouter.gtnhdumper.common.utils;
 
 import java.util.Collections;
 
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
+
+import com.iouter.gtnhdumper.DeterminismTransformer;
 import com.iouter.gtnhdumper.EnderIOMixinLoader;
 
 public final class SpriteAnimationRegression {
@@ -11,6 +19,7 @@ public final class SpriteAnimationRegression {
     public static void main(String[] args) {
         animations();
         interpolation();
+        clockRewrite();
         textures();
         EnderIOMixinLoader loader = new EnderIOMixinLoader();
         check(
@@ -63,6 +72,67 @@ public final class SpriteAnimationRegression {
         check(half[0][0] == 0xff800080, "Opaque pixels cross-fade");
         check(half[0][1] == 0x8000ff00, "Transparent pixels contribute no colour");
         check(SpriteAnimationTimeline.blend(from, to, 0)[0][0] == 0xffff0000, "The first tick shows the stored frame");
+    }
+
+    private static void clockRewrite() {
+        ClassNode node = new ClassNode();
+        MethodNode method = new MethodNode();
+        MethodInsnNode wall = new MethodInsnNode(
+            Opcodes.INVOKESTATIC,
+            "java/lang/System",
+            "currentTimeMillis",
+            "()J",
+            false);
+        MethodInsnNode lwjgl = new MethodInsnNode(Opcodes.INVOKESTATIC, "org/lwjglx/Sys", "getTime", "()J", false);
+        MethodInsnNode random = new MethodInsnNode(
+            Opcodes.INVOKEVIRTUAL,
+            "java/util/Random",
+            "nextDouble",
+            "()D",
+            false);
+        method.instructions.add(wall);
+        method.instructions.add(lwjgl);
+        method.instructions.add(random);
+        method.instructions.add(
+            new FieldInsnNode(
+                Opcodes.GETFIELD,
+                "makeo/gadomancy/client/util/FamiliarHandlerClient$PartialEntityFamiliar",
+                "ticksExisted",
+                "I"));
+        node.methods.add(method);
+        String clockClass = "makeo.gadomancy.client.renderers.item.ItemRenderFamiliar";
+        check(DeterminismTransformer.rewrite(clockClass, node) == 3, "Two clock reads and the familiar age");
+        check(wall.owner.endsWith("IconRenderClock") && wall.name.equals("currentTimeMillis"), "System clock");
+        check(lwjgl.name.equals("lwjglTime"), "LWJGL timer under either package name");
+        check(random.getOpcode() == Opcodes.INVOKEVIRTUAL, "Random calls only change in listed classes");
+        MethodInsnNode age = (MethodInsnNode) method.instructions.getLast();
+        check(age.name.equals("frozenTicks") && age.desc.equals("(I)I"), "Familiar age passes through the clock");
+        String randomClass = "makeo.gadomancy.common.utils.RandomizedAspectList";
+        check(DeterminismTransformer.rewrite(randomClass, node) == 1, "Random call redirected");
+        check(
+            random.getOpcode() == Opcodes.INVOKESTATIC && random.desc.equals("(Ljava/util/Random;)D"),
+            "The receiver becomes the argument");
+        seededModel();
+    }
+
+    private static void seededModel() {
+        ClassNode node = new ClassNode();
+        MethodNode method = new MethodNode();
+        MethodInsnNode constructor = new MethodInsnNode(
+            Opcodes.INVOKESPECIAL,
+            "java/util/Random",
+            "<init>",
+            "()V",
+            false);
+        method.instructions.add(constructor);
+        method.maxStack = 2;
+        node.methods.add(method);
+        check(
+            DeterminismTransformer.rewrite("twilightforest.client.model.ModelTFMosquitoSwarm", node) == 1,
+            "Unseeded generator found");
+        check(
+            constructor.desc.equals("(J)V") && constructor.getPrevious() instanceof LdcInsnNode && method.maxStack == 4,
+            "The seed is pushed and the stack has room for it");
     }
 
     private static void textures() {

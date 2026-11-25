@@ -86,7 +86,6 @@ public final class GalacticDimensionInfo {
                 .toString());
         result.put("relativeSize", body.getRelativeSize());
         result.put("relativeOrbitTime", body.getRelativeOrbitTime());
-        result.put("phaseShift", body.getPhaseShift());
         result.put("relativeDistance", body.getRelativeDistanceFromCenter().unScaledDistance);
         Planet parent = null;
         if (body instanceof Moon) parent = ((Moon) body).getParentPlanet();

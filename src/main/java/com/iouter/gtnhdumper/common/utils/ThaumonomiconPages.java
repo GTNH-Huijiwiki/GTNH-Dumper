@@ -336,6 +336,14 @@ public final class ThaumonomiconPages {
                     .getTag(),
                 entry.getValue());
         }
+        // Gadomancy refills its rolling list from a hash map: that order differs in every run.
+        if (list.getClass()
+            .getName()
+            .equals("makeo.gadomancy.common.utils.RandomizedAspectList")) {
+            Map<String, Integer> byName = new LinkedHashMap<>();
+            new java.util.TreeMap<>(map).forEach(byName::put);
+            return byName;
+        }
         return map;
     }
 

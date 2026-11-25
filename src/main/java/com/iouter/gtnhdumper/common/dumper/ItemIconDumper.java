@@ -16,7 +16,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
@@ -53,9 +52,6 @@ import codechicken.nei.guihook.GuiContainerManager;
 import codechicken.nei.shadow.org.apache.commons.csv.CSVFormat;
 import codechicken.nei.shadow.org.apache.commons.csv.CSVPrinter;
 import cpw.mods.fml.client.FMLClientHandler;
-import cpw.mods.fml.common.FMLCommonHandler;
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
-import cpw.mods.fml.common.gameevent.TickEvent;
 import cpw.mods.fml.common.registry.GameData;
 import gregtech.common.blocks.GTBlockOre;
 import gtPlusPlus.core.block.base.BlockBaseOre;
@@ -79,154 +75,53 @@ public class ItemIconDumper extends WikiDumper {
     private static final Map<String, Integer> unregisteredItems = new LinkedHashMap<>();
     private static final Map<String, String> renderFailures = new LinkedHashMap<>();
 
-    private static ItemIconDumper pending;
+    /** The dumper whose export is running; renders resolve their output directory through it. */
+    private static ItemIconDumper current;
     private List<ItemStack> selectedStacks;
     private File imageOutput;
-    private final Map<String, BufferedImage[]> timedFrames = new HashMap<>();
-    private final Map<String, BufferedImage> timedStatic = new HashMap<>();
     private final Map<String, Object> captureReport = new LinkedHashMap<>();
-    private TimedCapture capture;
 
     private File outputFile(String path) {
         return imageOutput == null ? ModFilter.current()
             .outputFile(path) : new File(imageOutput, path);
     }
 
-    /** Sample wall-clock renderers before entering the synchronous PNG/metadata writer. */
-    public void prepareTimedIconsAsync(Runnable success, Consumer<Throwable> failure) {
-        if (pending != null) throw new IllegalStateException("An icon export is already pending");
-        pending = this;
+    /** Selects the stacks before any output is written, so a mistyped selection fails the export at once. */
+    private void begin() {
+        captureReport.clear();
         imageOutput = ModFilter.current()
             .outputFile("");
-        captureReport.clear();
-        try {
-            selectedStacks = new ArrayList<>();
-            NameSelection keys = new NameSelection(ExportSession.imageKeys());
-            Map<String, ItemStack> timed = new LinkedHashMap<>();
-            for (ItemStack stack : AllItemStacks.getFilteredItemStacks()) {
-                String key = Utils.getItemStackShortKey(stack);
-                if (!keys.matches(key)) continue;
-                selectedStacks.add(stack);
-                if (ItemIconRenderProfile.forStack(stack).sampling != null) timed.putIfAbsent(key, stack.copy());
-            }
-            if (!keys.unmatched()
-                .isEmpty()) throw new IllegalArgumentException("Unknown imageKeys: " + keys.unmatched());
-            if (ExportSession.imageMetadata() != null || timed.isEmpty()) {
-                success.run();
-                return;
-            }
-            capture = new TimedCapture(timed, success, failure);
-            FMLCommonHandler.instance()
-                .bus()
-                .register(capture);
-        } catch (Exception | LinkageError error) {
-            cancelCapture();
-            failure.accept(error);
+        NameSelection keys = new NameSelection(ExportSession.imageKeys());
+        selectedStacks = new ArrayList<>();
+        for (ItemStack stack : AllItemStacks.getFilteredItemStacks()) {
+            if (keys.matches(Utils.getItemStackShortKey(stack))) selectedStacks.add(stack);
         }
+        if (!keys.unmatched()
+            .isEmpty()) throw new IllegalArgumentException("Unknown imageKeys: " + keys.unmatched());
+        current = this;
     }
 
-    public void cancelCapture() {
-        if (capture != null) FMLCommonHandler.instance()
-            .bus()
-            .unregister(capture);
-        capture = null;
+    private void end() {
         for (FBOHelper fbo : fbos.values()) fbo.close();
         fbos.clear();
-        if (pending == this) pending = null;
+        current = null;
         selectedStacks = null;
         imageOutput = null;
-        timedFrames.clear();
-        timedStatic.clear();
     }
 
     @Override
     public void dumpFile() {
         if (!canDump()) return;
-        final int mode = getMode();
         final File file = ModFilter.current()
             .outputFile("itemicon.json");
-        prepareTimedIconsAsync(() -> {
-            try {
-                Files.createDirectories(
-                    file.toPath()
-                        .getParent());
-                dumpTo(file, mode);
-                NEIClientUtils.printChatMessage(dumpMessage(file));
-            } catch (Exception | LinkageError error) {
-                GTNHDumper.LOG.error("Item icon export failed", error);
-            } finally {
-                cancelCapture();
-            }
-        }, error -> GTNHDumper.LOG.error("Item icon sampling failed", error));
-    }
-
-    /** Capture due frames on the render thread and record their actual wall-clock timestamps. */
-    public final class TimedCapture {
-
-        private final Map<String, ItemStack> stacks;
-        private final ItemIconRenderProfile.Sampling sampling;
-        private final Runnable success;
-        private final Consumer<Throwable> failure;
-        private long start = -1;
-        private int frame;
-        private final List<Long> sampleMillis = new ArrayList<>();
-
-        private TimedCapture(Map<String, ItemStack> stacks, Runnable success, Consumer<Throwable> failure) {
-            this.stacks = stacks;
-            this.success = success;
-            this.failure = failure;
-            sampling = ItemIconRenderProfile.forStack(
-                stacks.values()
-                    .iterator()
-                    .next()).sampling;
-            // One shared schedule keeps frame allocation, capture timing and metadata consistent for this batch.
-            for (Map.Entry<String, ItemStack> entry : stacks.entrySet()) {
-                if (ItemIconRenderProfile.forStack(entry.getValue()).sampling != sampling)
-                    throw new IllegalArgumentException("Timed icon batch requires a shared sampling schedule");
-                timedFrames.put(entry.getKey(), new BufferedImage[sampling.frameCount]);
-            }
-        }
-
-        @SubscribeEvent
-        public void renderTick(TickEvent.RenderTickEvent event) {
-            if (event.phase != TickEvent.Phase.END) return;
-            try {
-                long now = Minecraft.getSystemTime();
-                if (start < 0) start = now;
-                if (now - start < frame * (long) sampling.intervalMillis) return;
-                if (Minecraft.getMinecraft().theWorld == null)
-                    throw new IllegalStateException("World closed during icon capture");
-                sampleMillis.add(now - start);
-                for (Map.Entry<String, ItemStack> entry : stacks.entrySet()) {
-                    ItemStack stack = entry.getValue();
-                    FBOHelper fbo = getFbo(sampling.frameSize);
-                    try {
-                        timedFrames
-                            .get(entry.getKey())[frame] = renderItem(stack, fbo, RenderItem.getInstance(), 1f, null);
-                    } finally {
-                        fbo.restoreTexture();
-                    }
-                    if (frame == 0) {
-                        fbo = getFbo(SINGLE_FRAME_SIZE);
-                        try {
-                            timedStatic.put(entry.getKey(), renderItem(stack, fbo, RenderItem.getInstance(), 1f, null));
-                        } finally {
-                            fbo.restoreTexture();
-                        }
-                    }
-                }
-                if (++frame == sampling.frameCount) {
-                    FMLCommonHandler.instance()
-                        .bus()
-                        .unregister(this);
-                    capture = null;
-                    captureReport.put("sampleMillis", sampleMillis);
-                    success.run();
-                }
-            } catch (Exception | LinkageError error) {
-                cancelCapture();
-                failure.accept(error);
-            }
+        try {
+            Files.createDirectories(
+                file.toPath()
+                    .getParent());
+            dumpTo(file, getMode());
+            NEIClientUtils.printChatMessage(dumpMessage(file));
+        } catch (Exception | LinkageError error) {
+            GTNHDumper.LOG.error("Item icon export failed", error);
         }
     }
 
@@ -251,6 +146,15 @@ public class ItemIconDumper extends WikiDumper {
 
     @Override
     public Iterable<Object[]> dumpObject(int mode) {
+        begin();
+        try {
+            return exportIcons(mode);
+        } finally {
+            end();
+        }
+    }
+
+    private Iterable<Object[]> exportIcons(int mode) {
         long started = System.nanoTime();
         int workers = Integer.getInteger("gtnhdumper.pngWorkers", PngWriter.defaultWorkers());
         // Content-addressed PNG cache shared by all runs of this instance; unchanged pixels are linked, not encoded.
@@ -331,7 +235,7 @@ public class ItemIconDumper extends WikiDumper {
         frameCountMap.clear();
         dynamicSizeMap.clear();
 
-        List<ItemStack> itemStacks = selectedStacks == null ? AllItemStacks.getFilteredItemStacks() : selectedStacks;
+        List<ItemStack> itemStacks = selectedStacks;
 
         Map<String, String> redirectMap = new LinkedHashMap<>();
         Set<String> itemNameSet = new HashSet<>();
@@ -364,37 +268,23 @@ public class ItemIconDumper extends WikiDumper {
             ItemStack previous = rendered.putIfAbsent(iconName, stack);
             if (previous == null) {
                 if (reference == null) {
+                    // NBT copies may serialize map entries in a different order. Keep the original identity for
+                    // filenames while rendering a copy.
                     ItemStack renderStack = stack.copy();
-                    // NBT copies may serialize map entries in a different order. Keep the
-                    // original identity for filenames and captured-frame lookup while rendering a copy.
-                    ItemIconRenderProfile.Sampling sampling = ItemIconRenderProfile.forStack(renderStack).sampling;
-                    if (sampling != null) {
-                        String key = Utils.getItemStackShortKey(stack);
-                        BufferedImage[] frames = timedFrames.get(key);
-                        if (frames == null)
-                            throw new IllegalStateException("Timed icons require prepareTimedIconsAsync before dumpTo");
-                        FBOHelper.saveToFile(outputFile("icons/" + iconName), timedStatic.get(key));
-                        FBOHelper.saveToFile(
-                            outputFile("icons/" + getIconFileName(stack, true)),
-                            concatenateImages(frames, false));
-                        frameCountMap.put(renderStack, sampling.frameCount);
-                        dynamicSizeMap.put(renderStack, sampling.frameSize);
-                    } else {
-                        try {
-                            renderGeneralItem(
-                                renderStack,
-                                getFbo(SINGLE_FRAME_SIZE),
-                                RenderItem.getInstance(),
-                                iconName,
-                                getIconFileName(stack, true));
-                        } catch (RuntimeException | LinkageError error) {
-                            if (error instanceof PngWriter.OutputFailure) throw error;
-                            // A single item whose own icon code rejects its NBT must not abort the export.
-                            // It gets no icon mapping; the failure is listed in icon-failures.json.
-                            renderFailures.put(Utils.getItemStackShortKey(stack), error.toString());
-                            rendered.remove(iconName);
-                            continue;
-                        }
+                    try {
+                        renderGeneralItem(
+                            renderStack,
+                            getFbo(SINGLE_FRAME_SIZE),
+                            RenderItem.getInstance(),
+                            iconName,
+                            getIconFileName(stack, true));
+                    } catch (RuntimeException | LinkageError error) {
+                        if (error instanceof PngWriter.OutputFailure) throw error;
+                        // A single item whose own icon code rejects its NBT must not abort the export.
+                        // It gets no icon mapping; the failure is listed in icon-failures.json.
+                        renderFailures.put(Utils.getItemStackShortKey(stack), error.toString());
+                        rendered.remove(iconName);
+                        continue;
                     }
                     if (frameCountMap.containsKey(renderStack))
                         frameCountMap.put(stack, frameCountMap.getInt(renderStack));
@@ -559,8 +449,8 @@ public class ItemIconDumper extends WikiDumper {
     }
 
     private static File iconOutputFile(String path) {
-        return pending == null ? ModFilter.current()
-            .outputFile(path) : pending.outputFile(path);
+        return current == null ? ModFilter.current()
+            .outputFile(path) : current.outputFile(path);
     }
 
     private static FBOHelper getFbo(int size) {
@@ -622,6 +512,7 @@ public class ItemIconDumper extends WikiDumper {
         DynamicTexture dynamicTexture) {
         Minecraft minecraft = FMLClientHandler.instance()
             .getClient();
+        IconRenderClock.reseedSharedRandom();
         Map<String, Object> beforeFbo = ExportSession.imageDiagnostics() ? glDiagnostic() : null;
         fbo.begin();
         Map<String, Object> insideFbo = ExportSession.imageDiagnostics() ? glDiagnostic() : null;
@@ -658,10 +549,9 @@ public class ItemIconDumper extends WikiDumper {
             }
         }
         BufferedImage image = fbo.saveToImage();
-        if (pending != null
-            && (ItemIconRenderProfile.forStack(itemStack).sampling != null || ExportSession.imageDiagnostics())) {
+        if (current != null && ExportSession.imageDiagnostics()) {
             String key = Utils.getItemStackShortKey(itemStack);
-            if (image.getWidth() == SINGLE_FRAME_SIZE || !pending.captureReport.containsKey(key)) {
+            if (image.getWidth() == SINGLE_FRAME_SIZE || !current.captureReport.containsKey(key)) {
                 Map<String, Object> diagnostic = new LinkedHashMap<>();
                 int visible = 0;
                 for (int y = 0; y < image.getHeight(); y++)
@@ -682,7 +572,7 @@ public class ItemIconDumper extends WikiDumper {
                         : renderer.getClass()
                             .getName());
                 diagnostic.put("nbt", Utils.getItemNBT(itemStack));
-                pending.captureReport.put(key, diagnostic);
+                current.captureReport.put(key, diagnostic);
             }
         }
         return image;
@@ -695,6 +585,12 @@ public class ItemIconDumper extends WikiDumper {
 
     private static void renderGeneralItem(ItemStack itemStack, FBOHelper fbo, RenderItem itemRenderer,
         String staticName, String dynamicName) {
+        ItemIconRenderProfile.Sampling sampling = ItemIconRenderProfile.forStack(itemStack).sampling;
+        if (sampling != null) {
+            // Never resumed from earlier output: the frames follow the clock, not the textures.
+            renderClockSampled(itemStack, itemRenderer, sampling, staticName, dynamicName);
+            return;
+        }
         GtTickAnimation tickAnimation = GtTickAnimation.forStack(itemStack);
         DynamicTexture dynamicTexture = new DynamicTexture(itemStack);
         // Prismarine animations have thousands of frames (6600 for the wall); export them as still images.
@@ -825,6 +721,31 @@ public class ItemIconDumper extends WikiDumper {
         FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
         saveStrip(itemStack, images, dynamicName);
         dynamicFbo.restoreTexture();
+    }
+
+    /** Renderers driven by wall-clock time: the frozen clock advances by one interval per frame. */
+    private static void renderClockSampled(ItemStack itemStack, RenderItem itemRenderer,
+        ItemIconRenderProfile.Sampling sampling, String staticName, String dynamicName) {
+        FBOHelper frameFbo = getFbo(sampling.frameSize);
+        BufferedImage[] frames = new BufferedImage[sampling.frameCount];
+        BufferedImage still;
+        try {
+            for (int i = 0; i < frames.length; i++) {
+                IconRenderClock.setClockOffset(i * (long) sampling.intervalMillis);
+                IconRenderClock.setEffectFrame(i);
+                frames[i] = renderItem(itemStack, frameFbo, itemRenderer, 1f, null);
+            }
+            IconRenderClock.setClockOffset(0);
+            IconRenderClock.setEffectFrame(0);
+            still = renderItem(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer, 1f, null);
+        } finally {
+            IconRenderClock.setClockOffset(0);
+            IconRenderClock.setEffectFrame(0);
+            frameFbo.restoreTexture();
+        }
+        FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
+        saveStrip(itemStack, frames, dynamicName);
+        frameFbo.restoreTexture();
     }
 
     private static void saveStrip(ItemStack itemStack, BufferedImage[] frames, String dynamicName) {

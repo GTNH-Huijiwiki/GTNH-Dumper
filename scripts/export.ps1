@@ -32,6 +32,10 @@
   调试：只导出选中的 NEI 配方处理器（匹配处理器 ID、overlay ID、类名或标题，* 通配），同样写到 debug 目录。
 
 .EXAMPLE
+  .\scripts\export.ps1 -Separate -NoImages
+  完整数据导出写到独立的 dumper-runs\separate-<时间>，latest 保持原样；连做两次用来比对两次导出是否一致。
+
+.EXAMPLE
   .\scripts\export.ps1 englishnames
   只用 en_US 启动导出英文名（写到 dumper-runs\englishnames.json）。
 
@@ -60,7 +64,8 @@ param(
     [string] $Entities,  # 只重新导出这些实体的图片（逗号分隔注册名），要与任务 entityimages 一起用；其余图片与记录原样保留
     [string] $Items,     # 调试：只导出这些物品的图标（逗号分隔短键，* 通配）
     [string] $Handlers,  # 调试：只导出这些 NEI 配方处理器（逗号分隔，* 通配）
-    [switch] $Diagnostics # 在 icon-capture-report.json 记录渲染器与 GL 状态，配合 -Items 用
+    [switch] $Diagnostics, # 在 icon-capture-report.json 记录渲染器与 GL 状态，配合 -Items 用
+    [switch] $Separate   # 写到独立的 dumper-runs\separate-<时间>，latest 保持原样（比对两次导出用）
 )
 
 $ErrorActionPreference = 'Stop'
@@ -167,8 +172,11 @@ if ($selection) {
     $extra = @($Tasks | Where-Object { $implied -notcontains $_ })
     if ($extra.Count -gt 0) { throw "-Items / -Handlers 不能和这些任务一起用：$($extra -join ', ')" }
     $Tasks = $implied
-    $debugRunId = 'debug-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
-    $dumps = Join-Path (Join-Path $runs $debugRunId) 'dumps'
+}
+$isolated = $selection -or $Separate
+if ($isolated) {
+    $isolatedRunId = $(if ($selection) { 'debug-' } else { 'separate-' }) + (Get-Date -Format 'yyyyMMdd-HHmmss')
+    $dumps = Join-Path (Join-Path $runs $isolatedRunId) 'dumps'
 }
 $full = $Tasks.Count -eq 0
 if (-not (Test-Path $prismExe)) { throw "找不到 Prism：$prismExe（设置 PRISM_EXE）。" }
@@ -221,7 +229,9 @@ $gameLanguage = Get-Setting 'GAME_LANGUAGE' 'zh_CN'
 $englishFile = Join-Path $runs 'englishnames.json'
 $englishOnly = $Tasks.Count -eq 1 -and $Tasks[0] -eq 'englishnames'
 if ($Tasks -contains 'englishnames' -and -not $englishOnly) { throw 'englishnames 必须单独运行：它要用 en_US 启动，不能和别的任务一起。' }
-$runEnglish = $englishOnly -or ($full -and -not $SkipEnglishNames)
+if ($englishOnly -and $Separate) { throw 'englishnames 不支持 -Separate。' }
+# 独立导出沿用已有的英文名文件。
+$runEnglish = $englishOnly -or ($full -and -not $SkipEnglishNames -and -not $isolated)
 $optionsFile = Join-Path $gameDir 'options.txt'
 
 function Set-GameLanguage([string]$Lang) {
@@ -284,7 +294,7 @@ function Invoke-GameRun([System.Collections.IDictionary]$Request, [string]$Langu
 }
 
 Write-Host "输出：$dumps"
-if ($selection) { Write-Host '调试导出：latest 目录不受影响。' }
+if ($isolated) { Write-Host '独立导出：latest 目录不受影响。' }
 Write-Host "PNG 缓存：$cacheDir"
 
 # ── 第一步：en_US 导出英文名 ───────────────────────────────────────────
@@ -303,9 +313,11 @@ if ($englishOnly) { return }
 # ── 第二步：主导出 ─────────────────────────────────────────────────────
 $request = [ordered]@{ enabled = $true; outputMode = 'latest'; exitGame = $true; pngCacheDir = $cacheDir }
 if ($full) { $request['noImages'] = [bool]$NoImages } else { $request['tasks'] = $Tasks }
-if ($selection) {
+if ($isolated) {
     $request['outputMode'] = 'timestamp'
-    $request['runId'] = $debugRunId
+    $request['runId'] = $isolatedRunId
+}
+if ($selection) {
     if ($itemKeys.Count -gt 0) { $request['imageKeys'] = $itemKeys }
     if ($handlerNames.Count -gt 0) { $request['recipeHandlers'] = $handlerNames }
     if ($Diagnostics) { $request['imageDiagnostics'] = $true }
@@ -328,10 +340,10 @@ if ($usesNames) {
     }
 }
 Write-Host "导出：$(if ($full) { '全量' + $(if ($NoImages) { '（不含物品图标）' } else { '' }) } else { $Tasks -join ', ' })"
-if ($full -and (Test-Path $latest)) {
+if ($full -and -not $isolated -and (Test-Path $latest)) {
     if ($DryRun) { Write-Host '  [dry-run] 全量导出：先删除固定目录 latest' }
     else { Write-Host '全量导出：先删除固定目录 latest' }
     Remove-Safely $latest $runs
 }
 $s = Invoke-GameRun $request $gameLanguage '主导出'
-if ($s) { Write-Host "$(if ($selection) { '调试输出（不要给工具链用）' } else { '数据目录（工具链的 DUMPS_DIR）' })：$dumps" }
+if ($s) { Write-Host "$(if ($isolated) { '独立输出（不要给工具链用）' } else { '数据目录（工具链的 DUMPS_DIR）' })：$dumps" }

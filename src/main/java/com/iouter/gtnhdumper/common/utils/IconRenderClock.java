@@ -24,8 +24,9 @@ import cpw.mods.fml.relauncher.ReflectionHelper;
  * spawner entities, rotating models), the player's tick counter, and the animated atlas textures: every animated sprite
  * is reset to its first frame. Fluid textures drawn by fluid cells, flasks and facades are not the item's own icon, so
  * they would otherwise keep whichever frame the atlas showed when the export started (Hodgepodge only animates recently
- * drawn textures, so that frame differs from run to run). Renderers that read {@code System} time directly
- * stay time dependent; downstream tools detect those by comparing pixel hashes of repeated exports.
+ * drawn textures, so that frame differs from run to run). Classes that read {@code System} or LWJGL time directly are
+ * redirected here by {@code DeterminismTransformer}; the shared random generators are reseeded before each render.
+ * Whatever still depends on time or chance shows up by comparing pixel hashes of repeated exports.
  */
 public final class IconRenderClock {
 
@@ -33,6 +34,10 @@ public final class IconRenderClock {
     private static final long WORLD_TIME = 6000L;
 
     private static volatile boolean frozen;
+    /** Time and shared randomness are pinned for data exports too, without touching the world or textures. */
+    private static volatile boolean timeFrozen;
+    /** The player's ground contact before a data task pinned it, or null. */
+    private static Boolean savedOnGround;
     private static long savedWorldTime;
     private static long savedTotalWorldTime;
     private static float savedPartialTicks;
@@ -45,6 +50,11 @@ public final class IconRenderClock {
     private static final double[] PULSES = pulses();
     private static int effectFrame;
     private static int fixedPulses;
+    /** Milliseconds added to the frozen clock while sampling an animation that is driven by wall-clock time. */
+    private static volatile long clockOffset;
+    private static java.util.Random mathRandom;
+    private static final java.util.Random SEQUENCE = new java.util.Random(SYSTEM_TIME);
+    private static String mathRandomState = "unused";
     /** Saved values of mod animation counters: field, owner (null when static), original value. */
     private static final java.util.List<Object[]> savedCounters = new java.util.ArrayList<>();
     private static final Map<String, String> counterFailures = new LinkedHashMap<>();
@@ -58,7 +68,12 @@ public final class IconRenderClock {
         { "gregtech.common.GTClient", "renderTickTime", 0f },
         { "vazkii.botania.client.core.handler.ClientTickHandler", "ticksInGame", 6000 },
         { "vazkii.botania.client.core.handler.ClientTickHandler", "partialTicks", 0f },
-        { "thaumic.tinkerer.client.core.handler.ClientTickHandler", "elapsedTicks", 6000 }, };
+        { "thaumic.tinkerer.client.core.handler.ClientTickHandler", "elapsedTicks", 6000 },
+        // CodeChickenCore's render time turns NEI's spawner mobs, wireless trackers and ender storage models.
+        { "codechicken.core.internal.CCCEventHandler", "renderTime", 6000 },
+        { "codechicken.core.internal.CCCEventHandler", "renderFrame", 0f },
+        // The overlay on condensate fluid displays counts client ticks.
+        { "gregtech.client.handler.CondensateAnimationTickHandler", "currentFrame", 0 }, };
     private static final java.lang.reflect.Field FRAME_COUNTER = ReflectionHelper
         .findField(TextureAtlasSprite.class, "frameCounter", "field_110973_g");
     private static final java.lang.reflect.Field TICK_COUNTER = ReflectionHelper
@@ -72,12 +87,36 @@ public final class IconRenderClock {
         return frozen;
     }
 
+    /** True while exporting: redirected clock and random reads return fixed values. */
+    public static boolean isTimeFrozen() {
+        return frozen || timeFrozen;
+    }
+
+    /** Pins only the clocks and redirected random reads, for tasks that export data. */
+    public static void freezeTime() {
+        timeFrozen = true;
+        // Some tooltips change while the player is in the air, such as the slime sling's.
+        net.minecraft.client.entity.EntityClientPlayerMP player = Minecraft.getMinecraft().thePlayer;
+        if (player != null && savedOnGround == null) {
+            savedOnGround = player.onGround;
+            player.onGround = true;
+        }
+    }
+
+    public static void releaseTime() {
+        timeFrozen = false;
+        net.minecraft.client.entity.EntityClientPlayerMP player = Minecraft.getMinecraft().thePlayer;
+        if (player != null && savedOnGround != null) player.onGround = savedOnGround;
+        savedOnGround = null;
+    }
+
     public static synchronized void freeze() {
         if (frozen) return;
         failure = null;
         uncachedModelRenders = 0;
         fixedPulses = 0;
         effectFrame = 0;
+        clockOffset = 0;
         Minecraft minecraft = Minecraft.getMinecraft();
         try {
             if (minecraft.theWorld != null) {
@@ -194,7 +233,7 @@ public final class IconRenderClock {
 
     /** {@code Random.nextGaussian()} for redirected pulse effects: fixed per animation frame while exporting icons. */
     public static double pulseGaussian(java.util.Random random) {
-        if (!frozen) return random.nextGaussian();
+        if (!isTimeFrozen()) return random.nextGaussian();
         fixedPulses++;
         return PULSES[Math.floorMod(effectFrame, PULSES.length)];
     }
@@ -216,14 +255,111 @@ public final class IconRenderClock {
         return true;
     }
 
+    /** The frozen clock in milliseconds, including the offset of the frame being sampled. */
+    public static long frozenMillis() {
+        return SYSTEM_TIME + clockOffset;
+    }
+
+    /** Advances the frozen clock to sample an animation driven by wall-clock time; 0 returns to the frozen instant. */
+    public static void setClockOffset(long millis) {
+        clockOffset = millis;
+    }
+
     /** {@code System.currentTimeMillis()} for redirected item renderers. */
     public static long currentTimeMillis() {
-        return frozen ? SYSTEM_TIME : System.currentTimeMillis();
+        return isTimeFrozen() ? frozenMillis() : System.currentTimeMillis();
     }
 
     /** {@code System.nanoTime()} for redirected item renderers. */
     public static long nanoTime() {
-        return frozen ? SYSTEM_TIME * 1_000_000L : System.nanoTime();
+        return isTimeFrozen() ? frozenMillis() * 1_000_000L : System.nanoTime();
+    }
+
+    /** LWJGL's {@code Sys.getTime()}, whose timer counts milliseconds. */
+    public static long lwjglTime() {
+        return isTimeFrozen() ? frozenMillis() : org.lwjgl.Sys.getTime();
+    }
+
+    /** {@code Random.nextDouble()} for redirected classes: the middle of its range while exporting. */
+    public static double fixedDouble(java.util.Random random) {
+        return isTimeFrozen() ? 0.5 : random.nextDouble();
+    }
+
+    /** {@code Random.nextInt(bound)} for redirected classes: the middle of its range while exporting. */
+    public static int fixedInt(java.util.Random random, int bound) {
+        return isTimeFrozen() ? bound / 2 : random.nextInt(bound);
+    }
+
+    /** A tick counter read from a mod's own object. */
+    public static int frozenTicks(int ticks) {
+        return isTimeFrozen() ? (int) WORLD_TIME : ticks;
+    }
+
+    /** As {@link #frozenTicks}, for a counter kept as a {@code long}. */
+    public static long frozenLong(long ticks) {
+        return isTimeFrozen() ? WORLD_TIME : ticks;
+    }
+
+    /** The moment a renderer last drew something: now, so that no time has passed since. */
+    public static float frozenAge(float lastTick) {
+        return isTimeFrozen() ? WORLD_TIME : lastTick;
+    }
+
+    /** A renderer's current step in a slideshow of its own: the first one. */
+    public static int frozenState(int state) {
+        return isTimeFrozen() ? 0 : state;
+    }
+
+    /** {@code Object.hashCode()} used to vary a colour between stacks. */
+    public static int identityHash(Object value) {
+        return isTimeFrozen() ? 0 : value.hashCode();
+    }
+
+    /** A random number from {@code min} to {@code max}: the middle one while exporting. */
+    public static int fixedRange(int min, int max) {
+        return isTimeFrozen() ? (min + max) / 2
+            : java.util.concurrent.ThreadLocalRandom.current()
+                .nextInt(min, max + 1);
+    }
+
+    /** {@code Random.nextBoolean()} for icons that mix at random: the same mix in every render while exporting. */
+    public static boolean sequenceBoolean(java.util.Random random) {
+        return isTimeFrozen() ? SEQUENCE.nextBoolean() : random.nextBoolean();
+    }
+
+    /** As {@link #sequenceBoolean}. */
+    public static float sequenceFloat(java.util.Random random) {
+        return isTimeFrozen() ? SEQUENCE.nextFloat() : random.nextFloat();
+    }
+
+    /**
+     * Restarts the generators renderers share, so what a render draws from them does not depend on how much earlier
+     * renders consumed: the client world's, and the one behind {@code Math.random()}, from which new entities take
+     * their facing and dropped items their bobbing phase.
+     */
+    public static void reseedSharedRandom() {
+        if (isTimeFrozen()) reseedSharedRandom(WORLD_TIME * 31 + effectFrame);
+    }
+
+    /** As {@link #reseedSharedRandom()}, with a caller's seed, e.g. before building one particular entity. */
+    public static void reseedSharedRandom(long seed) {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        if (minecraft.theWorld != null) minecraft.theWorld.rand.setSeed(seed);
+        SEQUENCE.setSeed(seed);
+        if (mathRandom == null) {
+            if (!"unused".equals(mathRandomState)) return;
+            try {
+                java.lang.reflect.Field field = Class.forName("java.lang.Math$RandomNumberGeneratorHolder")
+                    .getDeclaredField("randomNumberGenerator");
+                field.setAccessible(true);
+                mathRandom = (java.util.Random) field.get(null);
+                mathRandomState = "seeded";
+            } catch (ReflectiveOperationException | RuntimeException error) {
+                mathRandomState = error.toString();
+                return;
+            }
+        }
+        mathRandom.setSeed(seed);
     }
 
     /** Uploads the first animation frame of every animated sprite and restarts its counters. */
@@ -269,6 +405,16 @@ public final class IconRenderClock {
         report.put("partialTicks", 0);
         report.put("uncachedGtModelRenders", uncachedModelRenders);
         report.put("fixedRandomPulses", fixedPulses);
+        report.put("mathRandom", mathRandomState);
+        // Classes the clock transformer rewrote, with the number of call sites; classes never loaded are absent.
+        Map<String, String> redirected = new java.util.TreeMap<>();
+        for (String property : System.getProperties()
+            .stringPropertyNames()) {
+            String prefix = com.iouter.gtnhdumper.DeterminismTransformer.REPORT_PREFIX;
+            if (property.startsWith(prefix))
+                redirected.put(property.substring(prefix.length()), System.getProperty(property));
+        }
+        report.put("redirectedClockClasses", redirected);
         report.put("failure", failure);
         return report;
     }

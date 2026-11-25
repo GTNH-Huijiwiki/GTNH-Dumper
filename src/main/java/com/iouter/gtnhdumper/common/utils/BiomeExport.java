@@ -35,6 +35,42 @@ public final class BiomeExport {
 
     private BiomeExport() {}
 
+    /**
+     * Twilight Forest's dark, snowy and swamp biomes hand out their monster list only once in a while and another list,
+     * {@code emptyList}, the rest of the time. Mods adding spawns when the game starts (Ender Zoo) get either one at
+     * random, so what each call returns differs between runs. Both are what spawns there: exports them together, by
+     * name.
+     */
+    private static List<?> spawnList(BiomeGenBase biome, EnumCreatureType type) {
+        List<?> list = biome.getSpawnableList(type);
+        if (type != EnumCreatureType.monster) return list;
+        Object other = null;
+        for (Class<?> owner = biome.getClass(); owner != BiomeGenBase.class; owner = owner.getSuperclass()) {
+            if (!owner.getName()
+                .startsWith("twilightforest.")) continue;
+            try {
+                Field field = owner.getDeclaredField("emptyList");
+                field.setAccessible(true);
+                other = field.get(biome);
+                break;
+            } catch (NoSuchFieldException elsewhere) {
+                // Declared by a superclass, or this biome has a plain list.
+            } catch (IllegalAccessException error) {
+                throw new IllegalStateException(error);
+            }
+        }
+        if (!(other instanceof List<?>extra)) return list;
+        List<?> own = ReflectionHelper
+            .getPrivateValue(BiomeGenBase.class, biome, "spawnableMonsterList", "field_76761_J");
+        List<Object> both = new ArrayList<>(own);
+        both.addAll(extra);
+        both.sort(
+            java.util.Comparator
+                .comparing((Object value) -> ((BiomeGenBase.SpawnListEntry) value).entityClass.getName())
+                .thenComparingInt(value -> ((BiomeGenBase.SpawnListEntry) value).itemWeight));
+        return both;
+    }
+
     public static void write(File file) throws Exception {
         Map<Integer, List<Integer>> bookPages = new LinkedHashMap<>();
         Map<String, Object> root = new LinkedHashMap<>();
@@ -94,7 +130,7 @@ public final class BiomeExport {
         Map<String, Object> spawns = new LinkedHashMap<>();
         for (EnumCreatureType type : EnumCreatureType.values()) {
             List<Map<String, Object>> entries = new ArrayList<>();
-            List<?> list = biome.getSpawnableList(type);
+            List<?> list = spawnList(biome, type);
             if (list == null) continue; // some mods return null instead of an empty list
             for (Object value : list) {
                 BiomeGenBase.SpawnListEntry entry = (BiomeGenBase.SpawnListEntry) value;

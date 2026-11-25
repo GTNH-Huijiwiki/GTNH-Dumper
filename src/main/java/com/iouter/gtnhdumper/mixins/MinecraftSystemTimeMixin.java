@@ -15,6 +15,6 @@ public abstract class MinecraftSystemTimeMixin {
 
     @Inject(method = "getSystemTime", at = @At("HEAD"), cancellable = true)
     private static void gtnhdumper$frozenClock(CallbackInfoReturnable<Long> callback) {
-        if (IconRenderClock.isFrozen()) callback.setReturnValue(IconRenderClock.SYSTEM_TIME);
+        if (IconRenderClock.isTimeFrozen()) callback.setReturnValue(IconRenderClock.frozenMillis());
     }
 }

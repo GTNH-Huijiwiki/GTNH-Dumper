@@ -49,6 +49,7 @@ import com.iouter.gtnhdumper.common.dumper.OreDictionaryDumper;
 import com.iouter.gtnhdumper.common.dumper.RecipesDumper;
 import com.iouter.gtnhdumper.common.dumper.TC4ThaumonomiconDumper;
 import com.iouter.gtnhdumper.common.dumper.TICMaterialDumper;
+import com.iouter.gtnhdumper.common.utils.IconRenderClock;
 import com.iouter.gtnhdumper.common.utils.ModFilter;
 import com.iouter.gtnhdumper.common.utils.RecipeCoverage;
 import com.iouter.gtnhdumper.common.utils.RecipeItemVariants;
@@ -85,11 +86,6 @@ public final class ExportSession {
     private final boolean imageDiagnostics;
     private final Set<String> imageKeys = new LinkedHashSet<>();
     private final Set<String> recipeHandlers = new LinkedHashSet<>();
-    private ItemIconDumper pendingIcons;
-    private boolean iconsReady;
-    private Throwable iconFailure;
-    private int iconErrors;
-    private long iconStarted;
     private final long seed;
     private final File imageMetadata;
     private final File imageResume;
@@ -474,27 +470,15 @@ public final class ExportSession {
             }
             if (nextTask < tasks.size()) {
                 ExportTask task = tasks.get(nextTask);
-                if (task.icons != null && !iconsReady) {
-                    if (pendingIcons == null) {
-                        exporting = true;
-                        pendingIcons = task.icons;
-                        iconErrors = loggedErrors.get();
-                        iconStarted = System.nanoTime();
-                        status("EXPORTING", "Sampling timed item icons");
-                        pendingIcons.prepareTimedIconsAsync(() -> iconsReady = true, error -> {
-                            iconFailure = error;
-                            iconsReady = true;
-                        });
-                    }
-                    return;
-                }
                 nextTask++;
                 status("EXPORTING", task.name);
-                int before = task.icons == null ? loggedErrors.get() : iconErrors;
-                long started = task.icons == null ? System.nanoTime() : iconStarted;
+                int before = loggedErrors.get();
+                long started = System.nanoTime();
                 exporting = true;
+                // Dimension probing generates terrain and may time itself; everything else exports with a pinned clock.
+                if (!task.name.equals("dimensionbiomes")) IconRenderClock.freezeTime();
+                IconRenderClock.reseedSharedRandom(task.name.hashCode());
                 try {
-                    if (iconFailure != null) throw new IllegalStateException("Icon sampling failed", iconFailure);
                     task.action.run();
                     if (loggedErrors.get() != before)
                         throw new IllegalStateException("Dumper logged errors in " + task.name);
@@ -504,11 +488,8 @@ public final class ExportSession {
                     failed.add("Automated export task failed: " + task.name + ": " + error);
                     GTNHDumper.LOG.error("Automated export task failed: " + task.name, error);
                 } finally {
-                    if (pendingIcons != null) pendingIcons.cancelCapture();
-                    pendingIcons = null;
-                    iconsReady = false;
-                    iconFailure = null;
                     exporting = false;
+                    IconRenderClock.releaseTime();
                     taskMillis.put(task.name, (System.nanoTime() - started) / 1000000L);
                 }
                 status("EXPORTING", (completed.contains(task.name) ? "Finished " : "Failed ") + task.name);
@@ -532,7 +513,6 @@ public final class ExportSession {
         finished = true;
         exporting = false;
         try {
-            if (pendingIcons != null) pendingIcons.cancelCapture();
             closingWorld = true;
             int before = loggedErrors.get();
             // loadWorld waits for the integrated server to save and stop, then flushes the save cache.
@@ -638,9 +618,7 @@ public final class ExportSession {
             skipped.put(name, "This data has no reliable per-entry mod ownership");
             return;
         }
-        ExportTask task = new ExportTask(name, () -> dumper.dumpTo(new File(output, name + ".json"), mode));
-        if (dumper instanceof ItemIconDumper) task.icons = (ItemIconDumper) dumper;
-        tasks.add(task);
+        tasks.add(new ExportTask(name, () -> dumper.dumpTo(new File(output, name + ".json"), mode)));
     }
 
     private void addThaumcraft() {
@@ -815,7 +793,6 @@ public final class ExportSession {
 
         private final String name;
         private final ExportAction action;
-        private ItemIconDumper icons;
 
         private ExportTask(String name, ExportAction action) {
             this.name = name;
