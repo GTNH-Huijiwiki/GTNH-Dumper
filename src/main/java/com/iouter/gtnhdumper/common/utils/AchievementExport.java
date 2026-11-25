@@ -91,11 +91,12 @@ public final class AchievementExport {
                 .getBytes(StandardCharsets.UTF_8));
     }
 
-    /** Page order as the achievement screen cycles them: the vanilla page first, then Forge pages. */
+    /** The vanilla page first, then Forge pages by name: their registration order changes between launches. */
     private static List<String> pages() {
         List<String> pages = new ArrayList<>();
         pages.add(VANILLA_PAGE);
         for (AchievementPage page : AchievementPage.getAchievementPages()) pages.add(page.getName());
+        java.util.Collections.sort(pages.subList(1, pages.size()));
         return pages;
     }
 

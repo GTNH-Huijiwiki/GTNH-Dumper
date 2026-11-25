@@ -26,7 +26,7 @@ public final class EarlyMixinPlugin implements IFMLLoadingPlugin, IEarlyMixinLoa
 
     @Override
     public String[] getASMTransformerClass() {
-        return null;
+        return new String[] { "com.iouter.gtnhdumper.DeterminismTransformer" };
     }
 
     @Override

@@ -19,11 +19,21 @@ public final class DeterminismMixinLoader implements ILateMixinLoader {
     @Override
     public List<String> getMixins(Set<String> loadedMods) {
         List<String> mixins = new ArrayList<>();
-        if (loadedMods.contains("NotEnoughItems")) mixins.add("determinism.TemplateRecipeHandlerCycleMixin");
+        if (loadedMods.contains("NotEnoughItems")) {
+            mixins.add("determinism.TemplateRecipeHandlerCycleMixin");
+            mixins.add("determinism.NEICatalystOrderMixin");
+        }
+        if (loadedMods.contains("Forestry")) mixins.add("determinism.ForestryCentrifugeOrderMixin");
+        if (loadedMods.contains("gtnhlib")) mixins.add("determinism.GTNHLibLoreSeedMixin");
+        if (loadedMods.contains("gregtech") && loadedMods.contains("Thaumcraft")) {
+            // BartWorks is part of the GregTech jar.
+            mixins.add("determinism.BartWorksAspectOrderMixin");
+        }
         if (loadedMods.contains("mobsinfo")) mixins.add("determinism.MobRecipeLoaderSeedMixin");
         if (loadedMods.contains("gregtech")) {
             mixins.add("determinism.GTInventoryCacheMixin");
             mixins.add("determinism.GTInfinityPulseMixin");
+            mixins.add("determinism.GTPPTextureSetMixin");
         }
         if (loadedMods.contains("Avaritia")) mixins.add("determinism.AvaritiaHaloPulseMixin");
         if (loadedMods.contains("eternalsingularity")) mixins.add("determinism.EternalSingularityPulseMixin");

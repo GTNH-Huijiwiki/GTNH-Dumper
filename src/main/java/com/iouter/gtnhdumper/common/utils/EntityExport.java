@@ -171,7 +171,14 @@ public final class EntityExport {
         if (mob != null) entity = (Entity) mobs.get(mob, "entity");
         if (entity == null && world != null && EntityLivingBase.class.isAssignableFrom(cls)) {
             try {
-                entity = EntityList.createEntityByName(id, world);
+                // Mods roll sizes and looks while constructing; the same seeds every run give the same stats.
+                IconRenderClock.reseedSharedRandom(id.hashCode());
+                EntitySeeds.begin();
+                try {
+                    entity = EntityList.createEntityByName(id, world);
+                } finally {
+                    EntitySeeds.end();
+                }
             } catch (Exception | LinkageError e) {
                 row.put("instanceError", e.toString());
             }
