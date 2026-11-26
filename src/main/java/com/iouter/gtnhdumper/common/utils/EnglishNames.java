@@ -38,6 +38,7 @@ public final class EnglishNames {
 
     private final Map<String, String> items = new LinkedHashMap<>();
     private final Map<String, String> fluids = new LinkedHashMap<>();
+    private final Map<String, String> alleles = new LinkedHashMap<>();
     private final AtomicInteger appliedItems = new AtomicInteger();
     private final AtomicInteger appliedFluids = new AtomicInteger();
 
@@ -55,6 +56,7 @@ public final class EnglishNames {
         EnglishNames names = new EnglishNames();
         fill(root, "items", names.items);
         fill(root, "fluids", names.fluids);
+        fill(root, "alleles", names.alleles);
         return names;
     }
 
@@ -83,6 +85,11 @@ public final class EnglishNames {
         String name = fluids.get(key);
         if (name != null) appliedFluids.incrementAndGet();
         return name;
+    }
+
+    /** English name of a Forestry allele (bee species and traits), or null. */
+    public String allele(String uid) {
+        return alleles.get(uid);
     }
 
     public int itemCount() {
@@ -130,6 +137,7 @@ public final class EnglishNames {
         root.put("language", language);
         root.put("items", itemNames);
         root.put("fluids", fluidNames);
+        if (cpw.mods.fml.common.Loader.isModLoaded("Forestry")) root.put("alleles", ForestryAlleleNames.all());
         Files.write(
             file.toPath(),
             GTNHDumper.GSON.toJson(root)

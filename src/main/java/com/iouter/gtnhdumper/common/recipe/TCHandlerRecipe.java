@@ -249,6 +249,8 @@ public class TCHandlerRecipe extends BaseHandlerRecipe {
 
         private Object[] inputItems;
         private AspectList inputAspects;
+        /** {@code {smallest, largest}} by aspect for the recipes whose essentia cost is rolled while playing. */
+        private java.util.Map<String, int[]> inputAspectRanges;
 
         private Object[] outputItems;
         private AspectList outputAspects;
@@ -271,6 +273,7 @@ public class TCHandlerRecipe extends BaseHandlerRecipe {
 
         public TCRecipe withInputAspects(AspectList aspects) {
             this.inputAspects = aspects;
+            this.inputAspectRanges = com.iouter.gtnhdumper.common.utils.RolledAspects.ranges(aspects, Aspect::getName);
             return this;
         }
 

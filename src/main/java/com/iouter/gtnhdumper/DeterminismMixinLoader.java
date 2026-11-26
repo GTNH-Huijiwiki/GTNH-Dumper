@@ -35,6 +35,7 @@ public final class DeterminismMixinLoader implements ILateMixinLoader {
             mixins.add("determinism.GTInfinityPulseMixin");
             mixins.add("determinism.GTPPTextureSetMixin");
         }
+        if (loadedMods.contains("ThaumicExploration")) mixins.add("determinism.UrnRenderBoundsMixin");
         if (loadedMods.contains("Avaritia")) mixins.add("determinism.AvaritiaHaloPulseMixin");
         if (loadedMods.contains("eternalsingularity")) mixins.add("determinism.EternalSingularityPulseMixin");
         return mixins;

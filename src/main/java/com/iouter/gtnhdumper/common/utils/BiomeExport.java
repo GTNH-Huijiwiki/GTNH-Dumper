@@ -82,6 +82,7 @@ public final class BiomeExport {
             if (biome != null && seen.add(biome.biomeID)) biomes.add(describe(biome, bookPages.get(biome.biomeID)));
         }
         root.put("biomes", biomes);
+        if (Loader.isModLoaded("Forestry")) root.put("forestryClimates", ForestryClimateNames.all());
         if (books != null) root.putAll(books);
         Files.createDirectories(
             file.toPath()

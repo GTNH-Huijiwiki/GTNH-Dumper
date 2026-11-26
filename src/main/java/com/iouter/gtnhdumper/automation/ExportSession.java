@@ -695,6 +695,13 @@ public final class ExportSession {
             new ExportTask(
                 "entities",
                 () -> com.iouter.gtnhdumper.common.utils.EntityExport.write(new File(output, "entities.json"))));
+        if (cpw.mods.fml.common.Loader.isModLoaded("Forestry")) {
+            if (filter.isActive()) skipped.put("bees", "Bee data belongs to the whole pack");
+            else tasks.add(
+                new ExportTask(
+                    "bees",
+                    () -> com.iouter.gtnhdumper.common.utils.BeeExport.write(new File(output, "bees"))));
+        }
         // Entity images only with images enabled, or when listed in tasks.
         if (filter.isActive()) skipped.put("entityimages", "Entities belong to the whole pack");
         else if (options.noImages && !options.tasks.contains("entityimages"))

@@ -22,6 +22,9 @@ public class RecipeItem {
     public Integer expectedAmount;
     public String meteorRole;
     public List<String> reagentRequirements;
+    /** Species uid and kind of a bee; see {@link com.iouter.gtnhdumper.common.utils.BeeIdentity}. */
+    public String beeSpecies;
+    public String beeType;
 
     public RecipeItem(String key, long amount) {
         this.key = key;
@@ -64,6 +67,11 @@ public class RecipeItem {
 
     public RecipeItem withNBT(ItemStack stack) {
         if (stack == null) return this;
+        com.iouter.gtnhdumper.common.utils.BeeIdentity bee = com.iouter.gtnhdumper.common.utils.BeeIdentity.of(stack);
+        if (bee != null) {
+            this.beeSpecies = bee.species;
+            this.beeType = bee.type;
+        }
         String nbt = Utils.getItemNBT(stack);
         if (nbt != null) {
             return withNBT(nbt);

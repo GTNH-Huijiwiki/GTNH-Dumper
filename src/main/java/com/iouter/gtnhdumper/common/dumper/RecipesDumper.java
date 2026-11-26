@@ -213,6 +213,14 @@ public class RecipesDumper extends FilteredDataDumper {
             com.iouter.gtnhdumper.common.utils.QuestItems.capture();
             com.iouter.gtnhdumper.common.utils.ScanTiming.add("questItems", null, System.nanoTime() - questStart);
         }
+        // Recipe pages leave out disabled bee species, whose combs are registered items all the same.
+        if (com.iouter.gtnhdumper.CommonProxy.isFRLoaded) {
+            try {
+                com.iouter.gtnhdumper.common.utils.BeeExport.captureItems();
+            } catch (RuntimeException | LinkageError e) {
+                RecipeItemVariants.reportFailure("bee products", e);
+            }
+        }
         for (IRecipeHandler handler : GuiUsageRecipe.usagehandlers) {
             // NEI initializes lazy caches (including furnace fuels) when creating a query instance.
             String timingName = handler.getClass()

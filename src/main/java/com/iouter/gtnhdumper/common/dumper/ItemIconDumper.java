@@ -605,15 +605,43 @@ public class ItemIconDumper extends WikiDumper {
             renderDynamicItem(itemStack, itemRenderer, dynamicTexture, staticName, dynamicName);
             return;
         }
+        IconRenderClock.takeStarfieldDrawn();
         BufferedImage image = renderItem(itemStack, fbo, itemRenderer, 1f, null);
+        boolean starfield = IconRenderClock.takeStarfieldDrawn();
         FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), image);
         fbo.restoreTexture();
+        if (starfield) renderStarfieldAnimation(itemStack, itemRenderer, dynamicTexture, dynamicName);
+    }
+
+    private static void renderStarfieldAnimation(ItemStack itemStack, RenderItem itemRenderer, DynamicTexture texture,
+        String dynamicName) {
+        int frameCount = StarfieldLoop.frameCount(texture.isDynamic() ? texture.lcm : 1);
+        FBOHelper frameFbo = getFbo(GtTickAnimation.FRAME_SIZE);
+        BufferedImage[] rendered = new BufferedImage[frameCount + StarfieldLoop.FADE_FRAMES];
+        try {
+            for (int i = 0; i < rendered.length; i++) {
+                if (texture.isDynamic()) texture.uploadFrame(i % texture.lcm);
+                IconRenderClock.setClockOffset(i * (long) StarfieldLoop.TICK_MILLIS);
+                IconRenderClock.setEffectFrame(i % frameCount);
+                rendered[i] = renderItem(itemStack, frameFbo, itemRenderer, 1f, null);
+            }
+        } finally {
+            IconRenderClock.setClockOffset(0);
+            IconRenderClock.setEffectFrame(0);
+            if (texture.isDynamic()) texture.restore();
+            frameFbo.restoreTexture();
+        }
+        BufferedImage[] frames = StarfieldLoop.close(rendered, StarfieldLoop.FADE_FRAMES);
+        // The shader can be turned off in GT's or Avaritia's client settings; then there is nothing to animate.
+        if (!deduplicateByPixel(rendered)) saveStrip(itemStack, frames, dynamicName);
+        frameFbo.restoreTexture();
     }
 
     private static boolean resumeItem(ItemStack stack, boolean dynamic, String name, String animation) {
         if (resume == null) return false;
         JsonObject images = resume.getAsJsonObject("images");
-        if (!images.has(name) || (dynamic && !images.has(animation))) return false;
+        // An icon that only turned out to be animated once drawn (the star field) is rendered again.
+        if (!images.has(name) || images.has(animation) != dynamic) return false;
         com.google.gson.JsonArray dimensions = images.getAsJsonArray(name);
         if (dimensions.get(0)
             .getAsInt() != SINGLE_FRAME_SIZE
@@ -675,10 +703,13 @@ public class ItemIconDumper extends WikiDumper {
         // The still icon is the first frame at full size, not an enlarged animation frame.
         BufferedImage still;
         int frameSize = SINGLE_FRAME_SIZE;
+        boolean starfield;
         try {
             dynamicTexture.uploadFrame(0);
+            IconRenderClock.takeStarfieldDrawn();
             still = renderItem(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer, 1f, null);
-            if (!is3dBlockItem(itemStack)) frameSize = chooseFrameSize(
+            starfield = IconRenderClock.takeStarfieldDrawn();
+            if (!starfield && !is3dBlockItem(itemStack)) frameSize = chooseFrameSize(
                 still,
                 getDynamicTextureSize(dynamicTexture),
                 frameCount,
@@ -686,6 +717,12 @@ public class ItemIconDumper extends WikiDumper {
         } finally {
             dynamicTexture.restore();
             getFbo(SINGLE_FRAME_SIZE).restoreTexture();
+        }
+        if (starfield) {
+            // The star field drifts while the texture animates: both advance in one loop.
+            FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
+            renderStarfieldAnimation(itemStack, itemRenderer, dynamicTexture, dynamicName);
+            return;
         }
         if (frameSize != SINGLE_FRAME_SIZE && frameSize != getDynamicTextureSize(dynamicTexture))
             detailAnimations.put(staticName, getDynamicTextureSize(dynamicTexture) + "->" + frameSize);

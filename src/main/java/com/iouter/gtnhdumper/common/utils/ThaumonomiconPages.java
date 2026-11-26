@@ -231,6 +231,8 @@ public final class ThaumonomiconPages {
         map.put("research", r.getResearch());
         map.put("instability", r.getInstability());
         map.put("aspects", aspects(r.getAspects()));
+        Map<String, int[]> ranges = RolledAspects.ranges(r.getAspects(), Aspect::getTag);
+        if (ranges != null) map.put("aspect_ranges", ranges);
         // tc4tweaks resolves ore-dictionary and fuzzy ingredients; plain Thaumcraft only has the concrete stacks.
         Object central = null;
         List<Object> components = null;
@@ -329,6 +331,7 @@ public final class ThaumonomiconPages {
     public static Map<String, Integer> aspects(AspectList list) {
         Map<String, Integer> map = new LinkedHashMap<>();
         if (list == null || list.aspects == null) return map;
+        RolledAspects.roll(list);
         for (Map.Entry<Aspect, Integer> entry : list.aspects.entrySet()) {
             if (entry.getKey() == null) continue;
             map.put(
@@ -336,15 +339,22 @@ public final class ThaumonomiconPages {
                     .getTag(),
                 entry.getValue());
         }
-        // Gadomancy refills its rolling list from a hash map: that order differs in every run.
-        if (list.getClass()
-            .getName()
-            .equals("makeo.gadomancy.common.utils.RandomizedAspectList")) {
+        // Gadomancy refills its rolling list from a hash map: that order differs in every run. Since 1.5.20 the
+        // recipes use a subclass of it.
+        if (isRolled(list)) {
             Map<String, Integer> byName = new LinkedHashMap<>();
             new java.util.TreeMap<>(map).forEach(byName::put);
             return byName;
         }
         return map;
+    }
+
+    private static boolean isRolled(AspectList list) {
+        for (Class<?> type = list.getClass(); type != AspectList.class; type = type.getSuperclass()) {
+            if (type.getName()
+                .equals("makeo.gadomancy.common.utils.RandomizedAspectList")) return true;
+        }
+        return false;
     }
 
     public static RecipeItem stack(ItemStack stack) {
