@@ -20,6 +20,7 @@ public class AspectListSerializer implements JsonSerializer<AspectList> {
             return null;
         }
         JsonObject obj = new JsonObject();
+        com.iouter.gtnhdumper.common.utils.RolledAspects.roll(src);
         LinkedHashMap<Aspect, Integer> aspects = src.aspects;
         if (aspects == null || aspects.isEmpty()
             || aspects.keySet()

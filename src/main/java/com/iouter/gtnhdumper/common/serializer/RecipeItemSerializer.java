@@ -19,7 +19,8 @@ public class RecipeItemSerializer implements JsonSerializer<RecipeItem> {
             && src.tooltip == null
             && src.expectedAmount == null
             && src.meteorRole == null
-            && src.reagentRequirements == null;
+            && src.reagentRequirements == null
+            && src.beeSpecies == null;
 
         if (hasOnlyKey && src.key != null) {
             return new JsonPrimitive(src.key);
@@ -38,6 +39,10 @@ public class RecipeItemSerializer implements JsonSerializer<RecipeItem> {
         }
         if (src.nbt != null) {
             obj.addProperty("nbt", src.nbt);
+        }
+        if (src.beeSpecies != null) {
+            obj.addProperty("beeSpecies", src.beeSpecies);
+            obj.addProperty("beeType", src.beeType);
         }
         if (src.tooltip != null) {
             obj.addProperty("tooltip", String.join("<br>", src.tooltip));

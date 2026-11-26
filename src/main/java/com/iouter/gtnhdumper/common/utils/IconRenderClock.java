@@ -52,6 +52,7 @@ public final class IconRenderClock {
     private static int fixedPulses;
     /** Milliseconds added to the frozen clock while sampling an animation that is driven by wall-clock time. */
     private static volatile long clockOffset;
+    private static boolean starfieldDrawn;
     private static java.util.Random mathRandom;
     private static final java.util.Random SEQUENCE = new java.util.Random(SYSTEM_TIME);
     private static String mathRandomState = "unused";
@@ -253,6 +254,21 @@ public final class IconRenderClock {
         if (!frozen) return false;
         uncachedModelRenders++;
         return true;
+    }
+
+    /**
+     * Called by {@code UniversiumShader.use()}: the star field drifts with the wall clock, so an icon drawn with it is
+     * an animation although none of its textures is.
+     */
+    public static void starfieldDrawn() {
+        starfieldDrawn = true;
+    }
+
+    /** Whether the star field was drawn since the last call. */
+    public static boolean takeStarfieldDrawn() {
+        boolean drawn = starfieldDrawn;
+        starfieldDrawn = false;
+        return drawn;
     }
 
     /** The frozen clock in milliseconds, including the offset of the frame being sampled. */

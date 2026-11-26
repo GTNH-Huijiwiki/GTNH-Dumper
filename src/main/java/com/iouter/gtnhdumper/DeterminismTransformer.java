@@ -32,6 +32,7 @@ public final class DeterminismTransformer implements IClassTransformer {
 
     private static final String CLOCK = "com/iouter/gtnhdumper/common/utils/IconRenderClock";
     private static final String COMPUTER_PARTS = "pl.asie.computronics.item.ItemOpenComputers";
+    private static final String STARFIELD_SHADER = "com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.shaders.UniversiumShader";
 
     /**
      * Fields renderers keep time or animation state in, as {@code owner.name}, with the {@code IconRenderClock} method
@@ -178,6 +179,12 @@ public final class DeterminismTransformer implements IClassTransformer {
         boolean seeded = SEEDED_CLASSES.contains(className);
         int rewritten = 0;
         for (MethodNode method : node.methods) {
+            if (className.equals(STARFIELD_SHADER) && method.name.equals("use") && method.desc.equals("()V")) {
+                // The export has to know which icons were drawn with the drifting star field.
+                method.instructions
+                    .insert(new MethodInsnNode(Opcodes.INVOKESTATIC, CLOCK, "starfieldDrawn", "()V", false));
+                rewritten++;
+            }
             for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
                 if (insn instanceof MethodInsnNode call) {
                     if (clock && redirectClock(call) || random && redirectRandom(call)

@@ -41,6 +41,7 @@ final class ExportOptions {
             "dimensionbiomes",
             "achievements",
             "entities",
+            "bees",
             "entityimages"));
 
     ExportOptions(JsonObject request) {

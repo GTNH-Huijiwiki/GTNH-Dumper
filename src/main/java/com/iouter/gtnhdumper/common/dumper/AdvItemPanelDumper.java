@@ -56,7 +56,7 @@ public class AdvItemPanelDumper extends WikiDumper {
     @Override
     public String[] header() {
         return new String[] { "shortKey", "key", "nbt", "originalName", "translatedName", "tooltips", "tooltipsShift",
-            "tooltipsCtrl", "tooltipsShiftAndCtrl", "mod", "icon", "aspect", "tooltipStats" };
+            "tooltipsCtrl", "tooltipsShiftAndCtrl", "mod", "icon", "aspect", "tooltipStats", "beeSpecies", "beeType" };
     }
 
     @Override
@@ -138,10 +138,14 @@ public class AdvItemPanelDumper extends WikiDumper {
             String originalName = englishNames == null ? null : englishNames.item(shortKey);
             if (originalName == null) originalName = originalNameMap.get(identity);
 
+            com.iouter.gtnhdumper.common.utils.BeeIdentity bee = com.iouter.gtnhdumper.common.utils.BeeIdentity
+                .of(identity);
+
             list.add(
                 new Object[] { shortKey, Utils.getItemKey(identity), nbt, originalName, translatedName, tooltip,
                     tooltips[TOOLTIP_LSHIFT], tooltips[TOOLTIP_LCONTROL], tooltips[TOOLTIP_LSHIFT_AND_LCONTROL],
-                    modName, imageName, aspectList, tooltipStats });
+                    modName, imageName, aspectList, tooltipStats, bee == null ? null : bee.species,
+                    bee == null ? null : bee.type });
         }
 
         return list;
