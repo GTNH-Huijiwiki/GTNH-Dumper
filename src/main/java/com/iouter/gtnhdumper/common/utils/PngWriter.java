@@ -25,7 +25,8 @@ import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
 
 /**
- * Owns PNG encoding only; callers keep all OpenGL operations on the client thread.
+ * Owns image encoding (PNG, or WebP for names ending in .webp); callers keep all OpenGL operations on the client
+ * thread.
  * <p>
  * Every image is identified by a SHA-1 of its size and ARGB pixels. When a cache directory is given, encoded files are
  * stored there under that hash and linked into the output, so an unchanged image is never encoded twice across runs.
@@ -159,10 +160,13 @@ public final class PngWriter implements AutoCloseable {
         String hash = pixelHash(image);
         pixelHashes.put(file.getName(), hash);
         if (cacheDirectory == null) {
-            encode(file, image);
+            encode(file, file.getName(), image);
             return;
         }
-        Path cached = new File(cacheDirectory, hash.substring(0, 2) + File.separator + hash + ".png").toPath();
+        boolean webp = file.getName()
+            .endsWith(IconImageFormat.EXTENSION);
+        String entry = hash + (webp ? IconImageFormat.cacheSuffix(file.getName()) : ".png");
+        Path cached = new File(cacheDirectory, hash.substring(0, 2) + File.separator + entry).toPath();
         // Writers of the same pixels, or of the same output name, take the same lock; cache entries are never replaced
         // because Windows briefly removes the target of a replacing move.
         synchronized (lock(hash)) {
@@ -172,8 +176,8 @@ public final class PngWriter implements AutoCloseable {
                 File temporary = new File(
                     cached.getParent()
                         .toFile(),
-                    hash + ".tmp");
-                encode(temporary, image);
+                    entry + ".tmp");
+                encode(temporary, file.getName(), image);
                 Files.move(temporary.toPath(), cached);
             }
         }
@@ -197,6 +201,19 @@ public final class PngWriter implements AutoCloseable {
 
     private Object lock(String key) {
         return locks[(key.hashCode() & Integer.MAX_VALUE) % locks.length];
+    }
+
+    /** Encodes by the name the image will have in the output, which may differ from the file being written. */
+    private static void encode(File file, String outputName, BufferedImage image) throws IOException {
+        if (!outputName.endsWith(IconImageFormat.EXTENSION)) {
+            encode(file, image);
+            return;
+        }
+        File parent = file.getParentFile();
+        if (parent != null) Files.createDirectories(parent.toPath());
+        // As for PNG: replace the directory entry so cached hardlinks remain immutable.
+        Files.deleteIfExists(file.toPath());
+        Files.write(file.toPath(), IconImageFormat.encode(outputName, image));
     }
 
     /** SHA-1 of "width:height:" followed by the ARGB pixels in row order, big endian. */

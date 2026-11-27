@@ -56,6 +56,7 @@ param(
     [Parameter(Position = 0, ValueFromRemainingArguments = $true)] [string[]] $Tasks,
     [switch] $Build,     # 先 gradlew build
     [switch] $NoImages,  # 全量导出时跳过物品图标
+    [switch] $LegacyPng, # 物品图标按旧格式输出 PNG 与帧长条（默认输出 WebP）
     [switch] $Clean,     # 只清理旧导出，不导出
     [switch] $List,      # 只列出任务名
     [switch] $DryRun,    # 只显示会做什么
@@ -317,6 +318,7 @@ if ($isolated) {
     $request['outputMode'] = 'timestamp'
     $request['runId'] = $isolatedRunId
 }
+if ($LegacyPng) { $request['legacyPng'] = $true }
 if ($selection) {
     if ($itemKeys.Count -gt 0) { $request['imageKeys'] = $itemKeys }
     if ($handlerNames.Count -gt 0) { $request['recipeHandlers'] = $handlerNames }
