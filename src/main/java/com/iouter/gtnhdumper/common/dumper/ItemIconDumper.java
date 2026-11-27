@@ -39,6 +39,7 @@ import com.iouter.gtnhdumper.common.base.WikiDumper;
 import com.iouter.gtnhdumper.common.utils.AllItemStacks;
 import com.iouter.gtnhdumper.common.utils.DynamicTexture;
 import com.iouter.gtnhdumper.common.utils.FBOHelper;
+import com.iouter.gtnhdumper.common.utils.IconHalo;
 import com.iouter.gtnhdumper.common.utils.IconImageFormat;
 import com.iouter.gtnhdumper.common.utils.IconRenderClock;
 import com.iouter.gtnhdumper.common.utils.ModFilter;
@@ -76,6 +77,8 @@ public class ItemIconDumper extends WikiDumper {
     /** Static icon file name to whether it, or its animation, is pixel art; written to itemicon.json. */
     private static final Map<String, Boolean> pixelStills = new HashMap<>();
     private static final Map<String, Boolean> pixelAnimations = new HashMap<>();
+    /** Static icon file name to the halo left out of it, as {@code texture|aarrggbb|spread}; see {@link IconHalo}. */
+    private static final Map<String, String> halos = new HashMap<>();
     /** Animations rendered above their texture resolution: file name to "texture->frame" sizes. */
     private static final Map<String, String> detailAnimations = new LinkedHashMap<>();
     private static final Object2IntOpenHashMap<ItemStack> frameCountMap = new Object2IntOpenHashMap<>();
@@ -251,6 +254,7 @@ public class ItemIconDumper extends WikiDumper {
         dynamicSizeMap.clear();
         pixelStills.clear();
         pixelAnimations.clear();
+        halos.clear();
         IconImageFormat.reset();
 
         List<ItemStack> itemStacks = selectedStacks;
@@ -326,6 +330,11 @@ public class ItemIconDumper extends WikiDumper {
                             stack,
                             metadata.get("size")
                                 .getAsInt());
+                    if (metadata.has("iconHalo") && !metadata.get("iconHalo")
+                        .isJsonNull()) halos.put(
+                            iconName,
+                            metadata.get("iconHalo")
+                                .getAsString());
                 }
             } else {
                 if (!new RecipeItemVariants.Key(previous).equals(new RecipeItemVariants.Key(stack)))
@@ -348,7 +357,8 @@ public class ItemIconDumper extends WikiDumper {
             }
             list.add(
                 new Object[] { Utils.getItemStackShortKey(stack), imageName, getItemDynamicSize(stack),
-                    getItemFrameCount(stack), pixelStills.get(imageName), pixelAnimations.get(imageName) });
+                    getItemFrameCount(stack), pixelStills.get(imageName), pixelAnimations.get(imageName),
+                    halos.get(imageName) });
         }
 
         if (reference != null) {
@@ -401,7 +411,8 @@ public class ItemIconDumper extends WikiDumper {
 
     @Override
     public String[] header() {
-        return new String[] { "shortKey", "iconName", "size", "frameCount", "iconPixelated", "animationPixelated" };
+        return new String[] { "shortKey", "iconName", "size", "frameCount", "iconPixelated", "animationPixelated",
+            "iconHalo" };
     }
 
     @Override
@@ -611,6 +622,14 @@ public class ItemIconDumper extends WikiDumper {
 
     private static void renderGeneralItem(ItemStack itemStack, FBOHelper fbo, RenderItem itemRenderer,
         String staticName, String dynamicName) {
+        IconHalo.take();
+        drawGeneralItem(itemStack, fbo, itemRenderer, staticName, dynamicName);
+        String halo = IconHalo.take();
+        if (halo != null) halos.put(staticName, halo);
+    }
+
+    private static void drawGeneralItem(ItemStack itemStack, FBOHelper fbo, RenderItem itemRenderer, String staticName,
+        String dynamicName) {
         // Only renders of 3D blocks may be stored lossy; flat item sprites stay pixel exact.
         if (is3dBlockItem(itemStack)) IconImageFormat.allowLossy(staticName);
         ItemIconRenderProfile.Sampling sampling = ItemIconRenderProfile.forStack(itemStack).sampling;
@@ -626,7 +645,15 @@ public class ItemIconDumper extends WikiDumper {
         // Prismarine animations have thousands of frames (6600 for the wall); export them as still images.
         boolean dynamic = tickAnimation != null
             || !staticName.startsWith("icon_Botania_prismarine") && dynamicTexture.isDynamic();
-        if (resumeItem(itemStack, dynamic, staticName, dynamicName)) return;
+        if (resumeItem(itemStack, dynamic, staticName, dynamicName)) {
+            // The halo is only known from drawing the item.
+            if (IconHalo.isRemoving()) {
+                FBOHelper probe = getFbo(GtTickAnimation.FRAME_SIZE);
+                renderItem(itemStack, probe, itemRenderer, 1f, null);
+                probe.restoreTexture();
+            }
+            return;
+        }
         if (tickAnimation != null) {
             renderTickAnimation(itemStack, itemRenderer, tickAnimation, dynamicTexture, staticName, dynamicName);
             return;
@@ -880,21 +907,21 @@ public class ItemIconDumper extends WikiDumper {
         try {
             for (int i = 0; i < frames.length; i++) {
                 if (texture.isDynamic()) texture.uploadFrame(i);
-                IconRenderClock.setGtAnimationTick(loop.tickAt(i));
+                animation.show(loop.tickAt(i));
                 IconRenderClock.setEffectFrame(i);
                 if (animation == GtTickAnimation.CONDENSATE) condensateFrame = (int) loop.tickAt(i);
                 frames[i] = renderItem(itemStack, frameFbo, itemRenderer, 1f, null);
             }
             if (texture.isDynamic()) texture.uploadFrame(0);
             condensateFrame = 0;
-            IconRenderClock.setGtAnimationTick(0);
+            animation.show(0);
             IconRenderClock.setEffectFrame(0);
             still = renderItem(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer, 1f, null);
         } finally {
             condensateFrame = 0;
             IconRenderClock.setEffectFrame(0);
             if (texture.isDynamic()) texture.restore();
-            IconRenderClock.restoreGtAnimationTick();
+            animation.reset();
             frameFbo.restoreTexture();
         }
         saveStill(staticName, still);
