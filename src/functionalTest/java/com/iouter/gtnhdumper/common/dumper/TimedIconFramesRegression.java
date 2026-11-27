@@ -26,6 +26,23 @@ public final class TimedIconFramesRegression {
         checkLoop(spin.loop(90), 90, 720.0 / 7);
         checkLoop(gaia.loop(8), 184, 180);
         checkLoop(gaia.loop(500), 500, 540);
+        checkGlitch();
+    }
+
+    private static void checkGlitch() {
+        for (String name : new String[] { "GlitchEffectRenderer", "GlitchEffectMetaItemRenderer" })
+            if (GtTickAnimation.forRenderer("gregtech.common.render.items." + name) != GtTickAnimation.GLITCH)
+                throw new AssertionError(name + " is not captured as the glitch animation");
+        checkLoop(GtTickAnimation.GLITCH.loop(1), 40, 40);
+        // GT counts 10 ms steps within a two second cycle: it glitches up to step 40 and rerolls every fifth step.
+        int glitched = 0;
+        for (int tick = 0; tick < 40; tick++) {
+            long step = GtTickAnimation.glitchMillis(tick) % 2000 / 10;
+            if (step % 5 != 0) throw new AssertionError("Tick " + tick + " misses the renderer's offset update");
+            if (step <= 40) glitched++;
+            if (tick == 0 && step <= 40) throw new AssertionError("The still frame is glitched");
+        }
+        if (glitched != 9) throw new AssertionError("Expected 9 glitched frames, got " + glitched);
     }
 
     private static void checkLoop(GtTickAnimation.Loop loop, int frames, double ticks) {

@@ -114,8 +114,6 @@ public final class DeterminismTransformer implements IClassTransformer {
      */
     static final Set<String> RANDOM_CLASSES = new HashSet<>(
         Arrays.asList(
-            "gregtech.common.render.items.GlitchEffectRenderer",
-            "gregtech.common.render.items.GlitchEffectMetaItemRenderer",
             // Tainted coal burns for a random time; the essentia compressor's recipe cost and the QED's name change.
             "fox.spiteful.forbidden.ForbiddenRecipes$1",
             "makeo.gadomancy.common.utils.RandomizedAspectList",
@@ -125,6 +123,15 @@ public final class DeterminismTransformer implements IClassTransformer {
             // A screaming enderman shakes; the top buffer core's colour is rolled on every read.
             "net.minecraft.client.renderer.entity.RenderEnderman",
             "gtPlusPlus.core.item.general.ItemBufferCore"));
+
+    /**
+     * Glitch renderers jump to new random offsets, one for each colour: they need values that differ from each other
+     * and from frame to frame, and are the same in every export.
+     */
+    static final Set<String> GLITCH_CLASSES = new HashSet<>(
+        Arrays.asList(
+            "gregtech.common.render.items.GlitchEffectRenderer",
+            "gregtech.common.render.items.GlitchEffectMetaItemRenderer"));
 
     /** Classes whose icon is a random mix: they draw from a stream that restarts before each render. */
     static final Set<String> SEQUENCE_CLASSES = new HashSet<>(
@@ -164,7 +171,8 @@ public final class DeterminismTransformer implements IClassTransformer {
         return CLOCK_CLASSES.contains(className) || RANDOM_CLASSES.contains(className)
             || SORTED_SET_CLASSES.contains(className)
             || SEQUENCE_CLASSES.contains(className)
-            || SEEDED_CLASSES.contains(className);
+            || SEEDED_CLASSES.contains(className)
+            || GLITCH_CLASSES.contains(className);
     }
 
     /**
@@ -177,6 +185,7 @@ public final class DeterminismTransformer implements IClassTransformer {
         boolean sortedSets = SORTED_SET_CLASSES.contains(className);
         boolean sequence = SEQUENCE_CLASSES.contains(className);
         boolean seeded = SEEDED_CLASSES.contains(className);
+        boolean glitch = GLITCH_CLASSES.contains(className);
         int rewritten = 0;
         for (MethodNode method : node.methods) {
             if (className.equals(STARFIELD_SHADER) && method.name.equals("use") && method.desc.equals("()V")) {
@@ -189,6 +198,7 @@ public final class DeterminismTransformer implements IClassTransformer {
                 if (insn instanceof MethodInsnNode call) {
                     if (clock && redirectClock(call) || random && redirectRandom(call)
                         || sequence && redirectSequence(call)
+                        || glitch && redirectGlitch(call)
                         || className.equals(COMPUTER_PARTS) && redirectIdentityHash(call)) {
                         rewritten++;
                     } else if (seeded && isUnseededRandom(call)) {
@@ -267,6 +277,17 @@ public final class DeterminismTransformer implements IClassTransformer {
         String target = null;
         if (call.name.equals("nextBoolean") && call.desc.equals("()Z")) target = "sequenceBoolean";
         else if (call.name.equals("nextFloat") && call.desc.equals("()F")) target = "sequenceFloat";
+        if (target == null) return false;
+        toStatic(call, target, "java/util/Random");
+        return true;
+    }
+
+    private static boolean redirectGlitch(MethodInsnNode call) {
+        if (!call.owner.equals("java/util/Random") || call.getOpcode() != Opcodes.INVOKEVIRTUAL
+            || !call.desc.equals("()D")) return false;
+        String target = null;
+        if (call.name.equals("nextDouble")) target = "glitchDouble";
+        else if (call.name.equals("nextGaussian")) target = "glitchGaussian";
         if (target == null) return false;
         toStatic(call, target, "java/util/Random");
         return true;

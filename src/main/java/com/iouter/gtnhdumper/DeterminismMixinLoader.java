@@ -33,10 +33,16 @@ public final class DeterminismMixinLoader implements ILateMixinLoader {
         if (loadedMods.contains("gregtech")) {
             mixins.add("determinism.GTInventoryCacheMixin");
             mixins.add("determinism.GTInfinityPulseMixin");
+            mixins.add("determinism.GTInfinityHaloMixin");
+            mixins.add("determinism.GTNeutroniumHaloMixin");
             mixins.add("determinism.GTPPTextureSetMixin");
         }
         if (loadedMods.contains("ThaumicExploration")) mixins.add("determinism.UrnRenderBoundsMixin");
-        if (loadedMods.contains("Avaritia")) mixins.add("determinism.AvaritiaHaloPulseMixin");
+        if (loadedMods.contains("Avaritia")) {
+            mixins.add("determinism.AvaritiaHaloPulseMixin");
+            // Also targets the Eternal Singularity's renderer, which cannot exist without Avaritia.
+            mixins.add("determinism.AvaritiaHaloMixin");
+        }
         if (loadedMods.contains("eternalsingularity")) mixins.add("determinism.EternalSingularityPulseMixin");
         return mixins;
     }

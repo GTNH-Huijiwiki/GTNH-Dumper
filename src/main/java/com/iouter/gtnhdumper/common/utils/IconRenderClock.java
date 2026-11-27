@@ -55,6 +55,7 @@ public final class IconRenderClock {
     private static boolean starfieldDrawn;
     private static java.util.Random mathRandom;
     private static final java.util.Random SEQUENCE = new java.util.Random(SYSTEM_TIME);
+    private static java.util.SplittableRandom glitchRandom = new java.util.SplittableRandom(SYSTEM_TIME);
     private static String mathRandomState = "unused";
     /** Saved values of mod animation counters: field, owner (null when static), original value. */
     private static final java.util.List<Object[]> savedCounters = new java.util.ArrayList<>();
@@ -348,6 +349,16 @@ public final class IconRenderClock {
         return isTimeFrozen() ? SEQUENCE.nextFloat() : random.nextFloat();
     }
 
+    /** {@code Random.nextDouble()} for the glitch renderers: a fixed value for each draw of each animation frame. */
+    public static double glitchDouble(java.util.Random random) {
+        return isTimeFrozen() ? glitchRandom.nextDouble() : random.nextDouble();
+    }
+
+    /** As {@link #glitchDouble}, for the draws that only decide a direction by their sign. */
+    public static double glitchGaussian(java.util.Random random) {
+        return isTimeFrozen() ? glitchRandom.nextDouble() - 0.5 : random.nextGaussian();
+    }
+
     /**
      * Restarts the generators renderers share, so what a render draws from them does not depend on how much earlier
      * renders consumed: the client world's, and the one behind {@code Math.random()}, from which new entities take
@@ -362,6 +373,8 @@ public final class IconRenderClock {
         Minecraft minecraft = Minecraft.getMinecraft();
         if (minecraft.theWorld != null) minecraft.theWorld.rand.setSeed(seed);
         SEQUENCE.setSeed(seed);
+        // Consecutive frame seeds must give unrelated values, which java.util.Random's first draws do not.
+        glitchRandom = new java.util.SplittableRandom(seed);
         if (mathRandom == null) {
             if (!"unused".equals(mathRandomState)) return;
             try {

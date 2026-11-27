@@ -7,11 +7,13 @@ import net.minecraftforge.client.IItemRenderer;
 import net.minecraftforge.client.MinecraftForgeClient;
 
 import com.iouter.gtnhdumper.CommonProxy;
+import com.iouter.gtnhdumper.common.utils.IconRenderClock;
 
 /**
  * GregTech item icons that move with GT's client tick counter (spinning transcendent metal parts and components,
- * colour-cycling materials). They have no animated texture, and the export holds that counter still, so their frames
- * are rendered by stepping it. The renderer GT actually uses decides, not the item's name.
+ * colour-cycling materials) or with the wall clock (the six-phased copper glitch). They have no animated texture, and
+ * the export holds both still, so their frames are rendered by stepping them. The renderer GT actually uses decides,
+ * not the item's name.
  */
 final class GtTickAnimation {
 
@@ -29,6 +31,14 @@ final class GtTickAnimation {
     static final GtTickAnimation CONDENSATE = new GtTickAnimation(
         GtCondensateOverlay.FRAMES,
         GtCondensateOverlay.FRAMES);
+    /**
+     * Every two seconds the icon glitches for the first 410 ms, jumping to a new random offset every 50 ms. It reads
+     * {@code System.nanoTime()}, so one tick here is 50 ms of the frozen clock.
+     */
+    static final GtTickAnimation GLITCH = new GtTickAnimation(40, 40);
+    private static final int GLITCH_TICK_MILLIS = 50;
+    /** The loop starts one second into the cycle: the first frame, also the still icon, shows the undisturbed item. */
+    private static final int GLITCH_START_TICK = 20;
 
     final int frameCount;
     final double periodTicks;
@@ -36,6 +46,23 @@ final class GtTickAnimation {
     private GtTickAnimation(int frameCount, double periodTicks) {
         this.frameCount = frameCount;
         this.periodTicks = periodTicks;
+    }
+
+    /** The frozen clock offset that shows a tick of the glitch. Whole ticks keep it on the renderer's 50 ms steps. */
+    static long glitchMillis(double tick) {
+        return (GLITCH_START_TICK + (long) Math.floor(tick)) * GLITCH_TICK_MILLIS;
+    }
+
+    /** Moves the clock this animation reads to a tick of its loop. */
+    void show(double tick) {
+        if (this == GLITCH) IconRenderClock.setClockOffset(glitchMillis(tick));
+        else IconRenderClock.setGtAnimationTick(tick);
+    }
+
+    /** Returns that clock to the frozen instant. */
+    void reset() {
+        if (this == GLITCH) IconRenderClock.setClockOffset(0);
+        else IconRenderClock.restoreGtAnimationTick();
     }
 
     /**
@@ -77,6 +104,9 @@ final class GtTickAnimation {
             case "RainbowOverlayRenderer":
             case "RainbowOverlayMetaItemRenderer":
                 return RAINBOW_HUE;
+            case "GlitchEffectRenderer":
+            case "GlitchEffectMetaItemRenderer":
+                return GLITCH;
             default:
                 return null;
         }
