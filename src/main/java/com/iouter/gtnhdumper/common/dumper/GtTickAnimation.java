@@ -25,6 +25,10 @@ final class GtTickAnimation {
     private static final GtTickAnimation GAIA_HUE = new GtTickAnimation(180, 180);
     /** {@code hue = ticks % 90 / 90}. */
     private static final GtTickAnimation RAINBOW_HUE = new GtTickAnimation(90, 90);
+    /** The condensate overlay: one overlay frame per tick. Its frames are chosen from the picture, not a renderer. */
+    static final GtTickAnimation CONDENSATE = new GtTickAnimation(
+        GtCondensateOverlay.FRAMES,
+        GtCondensateOverlay.FRAMES);
 
     final int frameCount;
     final double periodTicks;

@@ -286,6 +286,10 @@ public final class ExportSession {
         return active.filter;
     }
 
+    public static boolean legacyPng() {
+        return isExporting() && active.options.legacyPng;
+    }
+
     public static boolean imageDiagnostics() {
         return isExporting() && active.imageDiagnostics;
     }

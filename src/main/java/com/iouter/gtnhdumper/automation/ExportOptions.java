@@ -18,6 +18,8 @@ final class ExportOptions {
     final boolean imagesOnly;
     final boolean researchOnly;
     final boolean noImages;
+    /** Write item icons as PNG files and animation strips, as before WebP became the default. */
+    final boolean legacyPng;
     /** Selected export tasks; empty means the full export. */
     final Set<String> tasks;
     /** Entity ids for the entityimages task; empty means every entity. Existing images and metadata are kept. */
@@ -55,6 +57,7 @@ final class ExportOptions {
             .trim() : "";
         smoke = flag(request, "smoke", false);
         imagesOnly = flag(request, "imagesOnly", false);
+        legacyPng = flag(request, "legacyPng", false);
         researchOnly = flag(request, "researchOnly", false);
         if (researchOnly && (imagesOnly || smoke)) {
             throw new IllegalArgumentException("researchOnly excludes imagesOnly/smoke");

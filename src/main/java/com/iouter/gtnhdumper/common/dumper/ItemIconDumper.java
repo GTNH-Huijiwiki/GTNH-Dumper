@@ -39,6 +39,7 @@ import com.iouter.gtnhdumper.common.base.WikiDumper;
 import com.iouter.gtnhdumper.common.utils.AllItemStacks;
 import com.iouter.gtnhdumper.common.utils.DynamicTexture;
 import com.iouter.gtnhdumper.common.utils.FBOHelper;
+import com.iouter.gtnhdumper.common.utils.IconImageFormat;
 import com.iouter.gtnhdumper.common.utils.IconRenderClock;
 import com.iouter.gtnhdumper.common.utils.ModFilter;
 import com.iouter.gtnhdumper.common.utils.NameSelection;
@@ -63,6 +64,18 @@ public class ItemIconDumper extends WikiDumper {
     /** Animation frame size for icons that cannot be drawn at their texture resolution without loss. */
     private static final int DETAIL_FRAME_SIZE = 128;
     private static final long MAX_STRIP_WIDTH = 65536;
+    /**
+     * The star field shader derives star size from the eye-space position of each vertex, so those icons must be drawn
+     * as far from the camera as the real inventory screen draws them; everything else keeps the original setup.
+     */
+    private static boolean screenDistance;
+    /** The condensate overlay frame every render shows; only its animation steps it. */
+    private static int condensateFrame;
+    /** The star field's shapes are fine enough to need the full still size; 64 px frames turn them into blocks. */
+    private static final int STARFIELD_FRAME_SIZE = 256;
+    /** Static icon file name to whether it, or its animation, is pixel art; written to itemicon.json. */
+    private static final Map<String, Boolean> pixelStills = new HashMap<>();
+    private static final Map<String, Boolean> pixelAnimations = new HashMap<>();
     /** Animations rendered above their texture resolution: file name to "texture->frame" sizes. */
     private static final Map<String, String> detailAnimations = new LinkedHashMap<>();
     private static final Object2IntOpenHashMap<ItemStack> frameCountMap = new Object2IntOpenHashMap<>();
@@ -188,6 +201,8 @@ public class ItemIconDumper extends WikiDumper {
             Map<String, Object> metrics = new LinkedHashMap<>();
             metrics.put("workers", workers);
             metrics.put("maximumCompression", true);
+            metrics.put("iconFormat", ExportSession.legacyPng() ? "png" : "webp");
+            metrics.put("lossyBlockStills", IconImageFormat.lossyKept());
             metrics.put("writtenImages", writer.count());
             metrics.put("pngCache", cache == null ? null : cache.getAbsolutePath());
             metrics.put("pngCacheHits", writer.cacheHits());
@@ -234,6 +249,9 @@ public class ItemIconDumper extends WikiDumper {
         LinkedList<Object[]> list = new LinkedList<>();
         frameCountMap.clear();
         dynamicSizeMap.clear();
+        pixelStills.clear();
+        pixelAnimations.clear();
+        IconImageFormat.reset();
 
         List<ItemStack> itemStacks = selectedStacks;
 
@@ -270,7 +288,7 @@ public class ItemIconDumper extends WikiDumper {
                 if (reference == null) {
                     // NBT copies may serialize map entries in a different order. Keep the original identity for
                     // filenames while rendering a copy.
-                    ItemStack renderStack = stack.copy();
+                    ItemStack renderStack = GtFluidDisplayTag.forRender(stack.copy());
                     try {
                         renderGeneralItem(
                             renderStack,
@@ -320,17 +338,17 @@ public class ItemIconDumper extends WikiDumper {
             final String imageName = getIconFileName(stack);
             final String vaildFileName = Utils.replaceIllegalChars(translatedName);
             if (itemNameSet.add(vaildFileName)) {
-                redirectMap.put("File:" + vaildFileName + ".png", "File:" + imageName);
+                redirectMap.put("File:" + vaildFileName + iconExtension(), "File:" + imageName);
             } else {
                 int i = 2;
                 while (!itemNameSet.add(vaildFileName + " " + i)) {
                     i++;
                 }
-                redirectMap.put("File:" + vaildFileName + " " + i + ".png", "File:" + imageName);
+                redirectMap.put("File:" + vaildFileName + " " + i + iconExtension(), "File:" + imageName);
             }
             list.add(
                 new Object[] { Utils.getItemStackShortKey(stack), imageName, getItemDynamicSize(stack),
-                    getItemFrameCount(stack) });
+                    getItemFrameCount(stack), pixelStills.get(imageName), pixelAnimations.get(imageName) });
         }
 
         if (reference != null) {
@@ -383,7 +401,7 @@ public class ItemIconDumper extends WikiDumper {
 
     @Override
     public String[] header() {
-        return new String[] { "shortKey", "iconName", "size", "frameCount" };
+        return new String[] { "shortKey", "iconName", "size", "frameCount", "iconPixelated", "animationPixelated" };
     }
 
     @Override
@@ -398,7 +416,7 @@ public class ItemIconDumper extends WikiDumper {
     public static String getIconFileName(ItemStack stack, boolean isDynamic) {
         return "icon_" + Utils.replaceHuijiIllegalChars(Utils.getItemStackShortKey(getBaseIconStack(stack)))
             + (isDynamic ? "_dynamic" : "")
-            + ".png";
+            + iconExtension();
     }
 
     public static void testHashNBT() {
@@ -421,6 +439,11 @@ public class ItemIconDumper extends WikiDumper {
 
         GTNHDumper.debug("冲突数量: " + collisionCount);
         GTNHDumper.debug("唯一率: " + (100 - (collisionCount * 100.0 / Math.max(1, itemStacks.size()))) + "%");
+    }
+
+    /** WebP unless the request asks for the legacy PNG icons. */
+    private static String iconExtension() {
+        return ExportSession.legacyPng() ? ".png" : IconImageFormat.EXTENSION;
     }
 
     private static boolean usesBaseIcon(ItemStack stack) {
@@ -513,6 +536,7 @@ public class ItemIconDumper extends WikiDumper {
         Minecraft minecraft = FMLClientHandler.instance()
             .getClient();
         IconRenderClock.reseedSharedRandom();
+        GtCondensateOverlay.show(condensateFrame);
         Map<String, Object> beforeFbo = ExportSession.imageDiagnostics() ? glDiagnostic() : null;
         fbo.begin();
         Map<String, Object> insideFbo = ExportSession.imageDiagnostics() ? glDiagnostic() : null;
@@ -524,8 +548,10 @@ public class ItemIconDumper extends WikiDumper {
         GLStateManager.glPushMatrix();
         try {
             GLStateManager.glLoadIdentity();
-            GLStateManager.glOrtho(0, 16, 0, 16, -150.0F, 150.0F);
+            if (screenDistance) GLStateManager.glOrtho(0, 16, 0, 16, 1850.0F, 2150.0F);
+            else GLStateManager.glOrtho(0, 16, 0, 16, -150.0F, 150.0F);
             GLStateManager.glMatrixMode(GL11.GL_MODELVIEW);
+            if (screenDistance) GLStateManager.glTranslated(0, 0, -2000);
             RenderHelper.enableGUIStandardItemLighting();
             GLStateManager.enableRescaleNormal();
             GLStateManager.enableColorMaterial();
@@ -585,6 +611,8 @@ public class ItemIconDumper extends WikiDumper {
 
     private static void renderGeneralItem(ItemStack itemStack, FBOHelper fbo, RenderItem itemRenderer,
         String staticName, String dynamicName) {
+        // Only renders of 3D blocks may be stored lossy; flat item sprites stay pixel exact.
+        if (is3dBlockItem(itemStack)) IconImageFormat.allowLossy(staticName);
         ItemIconRenderProfile.Sampling sampling = ItemIconRenderProfile.forStack(itemStack).sampling;
         if (sampling != null) {
             // Never resumed from earlier output: the frames follow the clock, not the textures.
@@ -592,6 +620,8 @@ public class ItemIconDumper extends WikiDumper {
             return;
         }
         GtTickAnimation tickAnimation = GtTickAnimation.forStack(itemStack);
+        if (tickAnimation == null && hasCondensateOverlay(itemStack, itemRenderer))
+            tickAnimation = GtTickAnimation.CONDENSATE;
         DynamicTexture dynamicTexture = new DynamicTexture(itemStack);
         // Prismarine animations have thousands of frames (6600 for the wall); export them as still images.
         boolean dynamic = tickAnimation != null
@@ -608,16 +638,48 @@ public class ItemIconDumper extends WikiDumper {
         IconRenderClock.takeStarfieldDrawn();
         BufferedImage image = renderItem(itemStack, fbo, itemRenderer, 1f, null);
         boolean starfield = IconRenderClock.takeStarfieldDrawn();
-        FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), image);
+        if (starfield) image = renderAtScreenDistance(itemStack, fbo, itemRenderer);
+        saveStill(staticName, image);
         fbo.restoreTexture();
-        if (starfield) renderStarfieldAnimation(itemStack, itemRenderer, dynamicTexture, dynamicName);
+        if (starfield) renderStarfieldAnimation(itemStack, itemRenderer, dynamicTexture, staticName, dynamicName);
+    }
+
+    /** A fluid display whose picture changes with the overlay frame, whatever drew it. */
+    private static boolean hasCondensateOverlay(ItemStack itemStack, RenderItem itemRenderer) {
+        if (!GtCondensateOverlay.isFluidDisplay(itemStack)) return false;
+        FBOHelper probe = getFbo(GtTickAnimation.FRAME_SIZE);
+        BufferedImage first = renderItem(itemStack, probe, itemRenderer, 1f, null);
+        // GregTech's overlay texture repeats every half of its frames, so half way looks like the start.
+        condensateFrame = GtCondensateOverlay.FRAMES / 4;
+        try {
+            BufferedImage later = renderItem(itemStack, probe, itemRenderer, 1f, null);
+            return !deduplicateByPixel(new BufferedImage[] { first, later });
+        } finally {
+            condensateFrame = 0;
+            probe.restoreTexture();
+        }
+    }
+
+    private static BufferedImage renderAtScreenDistance(ItemStack itemStack, FBOHelper fbo, RenderItem itemRenderer) {
+        screenDistance = true;
+        try {
+            return renderItem(itemStack, fbo, itemRenderer, 1f, null);
+        } finally {
+            screenDistance = false;
+        }
+    }
+
+    private static void saveStill(String staticName, BufferedImage still) {
+        pixelStills.put(staticName, IconImageFormat.isPixelArt(still));
+        FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
     }
 
     private static void renderStarfieldAnimation(ItemStack itemStack, RenderItem itemRenderer, DynamicTexture texture,
-        String dynamicName) {
+        String staticName, String dynamicName) {
         int frameCount = StarfieldLoop.frameCount(texture.isDynamic() ? texture.lcm : 1);
-        FBOHelper frameFbo = getFbo(GtTickAnimation.FRAME_SIZE);
+        FBOHelper frameFbo = getFbo(STARFIELD_FRAME_SIZE);
         BufferedImage[] rendered = new BufferedImage[frameCount + StarfieldLoop.FADE_FRAMES];
+        screenDistance = true;
         try {
             for (int i = 0; i < rendered.length; i++) {
                 if (texture.isDynamic()) texture.uploadFrame(i % texture.lcm);
@@ -626,6 +688,7 @@ public class ItemIconDumper extends WikiDumper {
                 rendered[i] = renderItem(itemStack, frameFbo, itemRenderer, 1f, null);
             }
         } finally {
+            screenDistance = false;
             IconRenderClock.setClockOffset(0);
             IconRenderClock.setEffectFrame(0);
             if (texture.isDynamic()) texture.restore();
@@ -633,7 +696,10 @@ public class ItemIconDumper extends WikiDumper {
         }
         BufferedImage[] frames = StarfieldLoop.close(rendered, StarfieldLoop.FADE_FRAMES);
         // The shader can be turned off in GT's or Avaritia's client settings; then there is nothing to animate.
-        if (!deduplicateByPixel(rendered)) saveStrip(itemStack, frames, dynamicName);
+        if (!deduplicateByPixel(rendered)) {
+            saveStrip(itemStack, frames, dynamicName);
+            pixelAnimations.put(staticName, false);
+        }
         frameFbo.restoreTexture();
     }
 
@@ -709,6 +775,7 @@ public class ItemIconDumper extends WikiDumper {
             IconRenderClock.takeStarfieldDrawn();
             still = renderItem(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer, 1f, null);
             starfield = IconRenderClock.takeStarfieldDrawn();
+            if (starfield) still = renderAtScreenDistance(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer);
             if (!starfield && !is3dBlockItem(itemStack)) frameSize = chooseFrameSize(
                 still,
                 getDynamicTextureSize(dynamicTexture),
@@ -720,8 +787,8 @@ public class ItemIconDumper extends WikiDumper {
         }
         if (starfield) {
             // The star field drifts while the texture animates: both advance in one loop.
-            FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
-            renderStarfieldAnimation(itemStack, itemRenderer, dynamicTexture, dynamicName);
+            saveStill(staticName, still);
+            renderStarfieldAnimation(itemStack, itemRenderer, dynamicTexture, staticName, dynamicName);
             return;
         }
         if (frameSize != SINGLE_FRAME_SIZE && frameSize != getDynamicTextureSize(dynamicTexture))
@@ -739,7 +806,7 @@ public class ItemIconDumper extends WikiDumper {
             synchronized (OVERSIZED_ANIMATIONS) {
                 OVERSIZED_ANIMATIONS.put(staticName, frameCount + "x" + frameSize + "px=" + (stripBytes >> 20) + "MB");
             }
-            FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
+            saveStill(staticName, still);
             return;
         }
         FBOHelper dynamicFbo = getFbo(frameSize);
@@ -755,8 +822,10 @@ public class ItemIconDumper extends WikiDumper {
             dynamicTexture.restore();
             dynamicFbo.restoreTexture();
         }
-        FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
+        saveStill(staticName, still);
         saveStrip(itemStack, images, dynamicName);
+        // Frames smaller than the detail size were checked to reproduce the full render: they are the sprite itself.
+        pixelAnimations.put(staticName, frameSize < DETAIL_FRAME_SIZE && !is3dBlockItem(itemStack));
         dynamicFbo.restoreTexture();
     }
 
@@ -780,8 +849,9 @@ public class ItemIconDumper extends WikiDumper {
             IconRenderClock.setEffectFrame(0);
             frameFbo.restoreTexture();
         }
-        FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
+        saveStill(staticName, still);
         saveStrip(itemStack, frames, dynamicName);
+        pixelAnimations.put(staticName, false);
         frameFbo.restoreTexture();
     }
 
@@ -796,9 +866,15 @@ public class ItemIconDumper extends WikiDumper {
         DynamicTexture texture, String staticName, String dynamicName) {
         // Some of these also have an animated texture of their own; both advance together.
         GtTickAnimation.Loop loop = animation.loop(texture.isDynamic() ? texture.lcm : 1);
-        if ((long) loop.frameCount * GtTickAnimation.FRAME_SIZE > MAX_STRIP_WIDTH)
+        // The overlay is flat pixel art over the fluid texture: frames at its native size lose nothing.
+        int nativeSide = animation == GtTickAnimation.CONDENSATE
+            ? IconImageFormat.nativeSide(renderItem(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer, 1f, null))
+            : 0;
+        getFbo(SINGLE_FRAME_SIZE).restoreTexture();
+        int frameSize = nativeSide > 0 ? nativeSide : GtTickAnimation.FRAME_SIZE;
+        if ((long) loop.frameCount * frameSize > MAX_STRIP_WIDTH)
             throw new IllegalStateException("Animation of " + staticName + " needs " + loop.frameCount + " frames");
-        FBOHelper frameFbo = getFbo(GtTickAnimation.FRAME_SIZE);
+        FBOHelper frameFbo = getFbo(frameSize);
         BufferedImage[] frames = new BufferedImage[loop.frameCount];
         BufferedImage still;
         try {
@@ -806,22 +882,42 @@ public class ItemIconDumper extends WikiDumper {
                 if (texture.isDynamic()) texture.uploadFrame(i);
                 IconRenderClock.setGtAnimationTick(loop.tickAt(i));
                 IconRenderClock.setEffectFrame(i);
+                if (animation == GtTickAnimation.CONDENSATE) condensateFrame = (int) loop.tickAt(i);
                 frames[i] = renderItem(itemStack, frameFbo, itemRenderer, 1f, null);
             }
             if (texture.isDynamic()) texture.uploadFrame(0);
+            condensateFrame = 0;
             IconRenderClock.setGtAnimationTick(0);
             IconRenderClock.setEffectFrame(0);
             still = renderItem(itemStack, getFbo(SINGLE_FRAME_SIZE), itemRenderer, 1f, null);
         } finally {
+            condensateFrame = 0;
             IconRenderClock.setEffectFrame(0);
             if (texture.isDynamic()) texture.restore();
             IconRenderClock.restoreGtAnimationTick();
             frameFbo.restoreTexture();
         }
-        FBOHelper.saveToFile(iconOutputFile("icons/" + staticName), still);
+        saveStill(staticName, still);
+        // Where the fluid texture allows it, the overlay's own repeat leaves the loop twice over.
+        if (animation == GtTickAnimation.CONDENSATE) frames = withoutRepeats(frames);
         // GT's client settings can turn these effects off; then there is nothing to animate.
-        if (!deduplicateByPixel(frames)) saveStrip(itemStack, frames, dynamicName);
+        if (!deduplicateByPixel(frames)) {
+            saveStrip(itemStack, frames, dynamicName);
+            // Rotating and colour-cycling sprites are rasterised anew each frame; the condensate stays pixel art.
+            pixelAnimations.put(staticName, nativeSide > 0);
+        }
         frameFbo.restoreTexture();
+    }
+
+    /** The shortest leading part of a loop that, played over and over, shows the same frames. */
+    private static BufferedImage[] withoutRepeats(BufferedImage[] frames) {
+        while (frames.length % 2 == 0) {
+            int half = frames.length / 2;
+            for (int i = 0; i < half; i++)
+                if (!deduplicateByPixel(new BufferedImage[] { frames[i], frames[i + half] })) return frames;
+            frames = java.util.Arrays.copyOf(frames, half);
+        }
+        return frames;
     }
 
     /**
