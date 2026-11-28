@@ -539,9 +539,12 @@ NBT 取与新建同注册名实体不同的标量字段；另有 `variantOf`、`
 
 `entityimages` 任务（全量导出且 `noImages: false`，或在 `tasks` 中列出）为每个生物写出两张图到 `entity-images/`：
 
-- `Entity <注册名>.png`：全身照，1024×1024，斜前方 3/4 俯视、物品栏光照，按 2048 渲染后缩小。
-- `EntityHead <注册名>.png`：像素头像，正面平视、无光照，只画模型的头部部件（每模型单位 4 像素，纹素对齐像素）。
+- `Entity <注册名>.webp`：全身照，1024×1024，斜前方 3/4 俯视、物品栏光照，按 2048 渲染后缩小。
+- `EntityHead <注册名>.webp`：像素头像，正面平视、无光照，只画模型的头部部件（每模型单位 4 像素，纹素对齐像素）。
   认不出头部时画整个生物（`headSource: "body"`）。注册名中的 `#` 等文件名不能用的字符换成空格或下划线。
+
+两种图都按物品图标的 WebP 规则编码：像素图按原生尺寸无损存储；全身照是带光照的渲染图，有损明显更小时用有损，头像永远无损。
+`legacyPng`（`export.ps1 -LegacyPng`）时改回 `.png`。文件名以 `entity-images.json` 里记的为准。
 
 姿势固定（身体、头、俯仰朝正前方，无摆动、受伤与死亡动画，时钟冻结）；实体在按类名固定随机种子的范围内新建，
 构造期间 `entityInit` 前后与每次渲染前都重设实体与世界的随机数，Special Mobs 的随机体型等每次相同。
@@ -551,8 +554,10 @@ NBT 取与新建同注册名实体不同的标量字段；另有 `variantOf`、`
 
 `entity-images.json`：`images`（每个实体的 `full`、`head`、`headSource`、`headView` 等）、`failures`、`skipped`
 （如盔甲架）、`pixelHashes`（每个文件的像素哈希，同 `icon-hashes.json`）与 `pngCacheHits`。
-PNG 与物品图标共用内容缓存（`.minecraft/dumper-cache/png/`），像素不变的图片只建硬链接。
+实体图与物品图标共用内容缓存（`.minecraft/dumper-cache/png/`），像素不变的图片只建硬链接。
 少数生物的渲染器自身取随机（蚊群、愤怒末影人的抖动、粒子），两次导出仍可能不同，由工具链的不稳定名单处理。
+全身照的取景对之前任务留下的渲染状态敏感（排在物品图标后面画，约三十多个实体会差几个像素），所以 `export.ps1`
+在含实体图片的导出末尾另开一次游戏单独画实体图；手动或自己写配置导出时，请让 `entityimages` 单独运行。
 
 ## 蜜蜂
 

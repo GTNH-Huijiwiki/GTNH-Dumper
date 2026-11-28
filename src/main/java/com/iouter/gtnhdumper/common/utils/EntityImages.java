@@ -45,11 +45,13 @@ import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.relauncher.ReflectionHelper;
 
 /**
- * Two images per living entity, in {@code entity-images/}, listed in {@code entity-images.json}:
+ * Two images per living entity, in {@code entity-images/}, listed in {@code entity-images.json}. They are WebP, encoded
+ * by the item icon rules ({@link IconImageFormat}; the full body may be lossy when that is clearly smaller), or PNG
+ * with {@code legacyPng}:
  * <ul>
- * <li>{@code Entity <id>.png}: full body, 1024×1024, three-quarter view from slightly above, standard item
+ * <li>{@code Entity <id>.webp}: full body, 1024×1024, three-quarter view from slightly above, standard item
  * lighting, rendered at 2048 and box-filtered down.</li>
- * <li>{@code EntityHead <id>.png}: pixel head icon, flat front orthographic view without lighting, only the model
+ * <li>{@code EntityHead <id>.webp}: pixel head icon, flat front orthographic view without lighting, only the model
  * parts that make up the head (and everything attached to them), at {@link #HEAD_PIXELS} pixels per model unit. When
  * no head part can be identified the whole entity is drawn the same way ({@code headSource: "body"}).</li>
  * </ul>
@@ -142,6 +144,10 @@ public final class EntityImages {
             .replaceAll("[<>\\[\\]|{}/:]", "_");
     }
 
+    private static String extension() {
+        return ExportSession.legacyPng() ? ".png" : IconImageFormat.EXTENSION;
+    }
+
     public static void write(File output) throws Exception {
         write(output, Collections.emptySet());
     }
@@ -218,6 +224,7 @@ public final class EntityImages {
         // so the files keep their modification time and the toolchain's hash cache hits on re-runs.
         File cache = ExportSession.pngCache();
         PngWriter writer = new PngWriter(PngWriter.defaultWorkers(), cache);
+        IconImageFormat.reset();
         FBOHelper.setPngWriter(writer);
         try {
             for (String[] target : targets) {
@@ -243,7 +250,9 @@ public final class EntityImages {
                     BufferedImage full = SKIP_FULL.containsKey(id) ? null : full(entity);
                     if (SKIP_FULL.containsKey(id)) row.put("fullSkipped", SKIP_FULL.get(id));
                     if (full != null) {
-                        String name = "Entity " + key + ".png";
+                        String name = "Entity " + key + extension();
+                        // 带光照的渲染图和 3D 方块图标一样处理：有损明显更小时才用有损；头像是像素图，永远无损。
+                        IconImageFormat.allowLossy(name);
                         FBOHelper.saveToFile(new File(directory, name), full);
                         row.put("full", name);
                     }
@@ -254,7 +263,7 @@ public final class EntityImages {
                     row.put("headSource", icon != null ? "model" : "body");
                     if (icon == null) icon = head(entity, render, null);
                     if (icon != null) {
-                        String name = "EntityHead " + key + ".png";
+                        String name = "EntityHead " + key + extension();
                         FBOHelper.saveToFile(new File(directory, name), icon);
                         row.put("head", name);
                         row.put("headView", lastIconView);
@@ -292,7 +301,7 @@ public final class EntityImages {
             Map<String, Object> to = (Map<String, Object>) target;
             Map<?, ?> from = (Map<?, ?>) source;
             if (!(from.get("head") instanceof String head)) continue;
-            String name = "EntityHead " + fileKey(entry.getKey()) + ".png";
+            String name = "EntityHead " + fileKey(entry.getKey()) + extension();
             Files.copy(
                 new File(directory, head).toPath(),
                 new File(directory, name).toPath(),

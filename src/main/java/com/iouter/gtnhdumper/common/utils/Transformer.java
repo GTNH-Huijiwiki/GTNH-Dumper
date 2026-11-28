@@ -82,7 +82,11 @@ public class Transformer {
                     Object value = meta.getValue();
                     String key = idField.get(meta.getKey())
                         .toString();
-                    metadata.put(key, CommonProxy.isCropsNHLoaded ? cropMetadata(value) : value);
+                    metadata.put(
+                        key,
+                        BoundedJson.exportable(
+                            com.iouter.gtnhdumper.GTNHDumper.GSON,
+                            CommonProxy.isCropsNHLoaded ? cropMetadata(value) : value));
                 } catch (Exception ignored) {}
             }
         } catch (Exception e) {
