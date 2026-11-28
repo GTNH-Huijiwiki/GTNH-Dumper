@@ -8,6 +8,7 @@
     不带任务名：全量导出。先删除 dumper-runs\latest，再重新导出。
     带任务名：  只重新导出这些任务（latest 模式），其余数据原样保留。
   全量导出先用 en_US 启动一次导出英文名，再用 GAME_LANGUAGE（默认 zh_CN）做主导出；语言由脚本写进 options.txt。
+  含实体图片时，主导出之后再启动一次只画实体图片，保证和单独导出一致。
   PNG 内容缓存默认在仓库的 dumper-cache（PNG_CACHE_DIR 可改），不在实例里。
   配置见 .env.example。
 
@@ -34,6 +35,10 @@
 .EXAMPLE
   .\scripts\export.ps1 -Separate -NoImages
   完整数据导出写到独立的 dumper-runs\separate-<时间>，latest 保持原样；连做两次用来比对两次导出是否一致。
+
+.EXAMPLE
+  .\scripts\export.ps1 itemicon advitempanel recipes oreDictionary fluid -ModFilter TwistSpaceTechnology -Separate
+  只导出一个附属 Mod 的数据与图标，写到 dumper-runs\separate-<时间>\dumps\filtered\<modid>\（要和任务名一起用）。
 
 .EXAMPLE
   .\scripts\export.ps1 englishnames
@@ -63,6 +68,7 @@ param(
     [switch] $SkipEnglishNames, # 全量导出时不先用 en_US 跑一次英文名（少启动一次游戏，但 CropsNH 等机器的英文名会是中文）
     [string] $Jar,       # 指定 jar，覆盖 DUMPER_JAR 与 build\libs
     [string] $Entities,  # 只重新导出这些实体的图片（逗号分隔注册名），要与任务 entityimages 一起用；其余图片与记录原样保留
+    [string] $ModFilter, # 只导出这个附属 Mod（modid 或名称），输出在 dumps\filtered\<modid>\；要和任务名一起用
     [string] $Items,     # 调试：只导出这些物品的图标（逗号分隔短键，* 通配）
     [string] $Handlers,  # 调试：只导出这些 NEI 配方处理器（逗号分隔，* 通配）
     [switch] $Diagnostics, # 在 icon-capture-report.json 记录渲染器与 GL 状态，配合 -Items 用
@@ -165,6 +171,8 @@ foreach ($task in $Tasks) {
 $itemKeys = @($Items -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $handlerNames = @($Handlers -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $selection = $itemKeys.Count -gt 0 -or $handlerNames.Count -gt 0
+# 全量导出会画全部实体图片，按 Mod 导出时必须点名任务。
+if ($ModFilter -and $Tasks.Count -eq 0) { throw '-ModFilter 要和任务名一起用。' }
 if ($Diagnostics -and $itemKeys.Count -eq 0) { throw '-Diagnostics 要和 -Items 一起用。' }
 if ($selection) {
     $implied = @()
@@ -319,6 +327,7 @@ if ($isolated) {
     $request['runId'] = $isolatedRunId
 }
 if ($LegacyPng) { $request['legacyPng'] = $true }
+if ($ModFilter) { $request['modFilter'] = $ModFilter }
 if ($selection) {
     if ($itemKeys.Count -gt 0) { $request['imageKeys'] = $itemKeys }
     if ($handlerNames.Count -gt 0) { $request['recipeHandlers'] = $handlerNames }
@@ -348,4 +357,15 @@ if ($full -and -not $isolated -and (Test-Path $latest)) {
     Remove-Safely $latest $runs
 }
 $s = Invoke-GameRun $request $gameLanguage '主导出'
-if ($s) { Write-Host "$(if ($isolated) { '独立输出（不要给工具链用）' } else { '数据目录（工具链的 DUMPS_DIR）' })：$dumps" }
+
+# ── 第三步：实体图片单独再渲一次 ───────────────────────────────────────
+# 全身图的取景对之前渲染留下的 GL 状态敏感：排在物品图标等任务后面画，会和刚启动时画的差几个像素。
+# 让实体图总在新启动的游戏里单独画，结果与单独导出一致，重复导出才稳定。
+$withEntityImages = if ($full) { -not $NoImages } else { $Tasks -contains 'entityimages' -and $Tasks.Count -gt 1 }
+if ($withEntityImages -and $isolated) {
+    Write-Warning '独立导出里的实体图和别的任务在同一次启动里画，个别全身图会和单独导出差几个像素；要比对请单独跑 entityimages -Separate。'
+} elseif ($withEntityImages) {
+    $null = Invoke-GameRun ([ordered]@{ enabled = $true; outputMode = 'latest'; exitGame = $true; pngCacheDir = $cacheDir
+            tasks = @('entityimages'); legacyPng = [bool]$LegacyPng }) $gameLanguage '实体图片'
+}
+if ($s -or $DryRun) { Write-Host "$(if ($isolated) { '独立输出（不要给工具链用）' } else { '数据目录（工具链的 DUMPS_DIR）' })：$dumps" }
